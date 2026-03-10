@@ -37,24 +37,54 @@
               <div class="bento-card">
                 <div class="muted2" style="font-size:12px;">面试难度</div>
                 <div style="margin-top:10px;" class="seg">
-                  <button class="seg-btn" :class="cfg.difficulty==='easy'?'on':''" @click="cfg.difficulty='easy'">简单</button>
-                  <button class="seg-btn" :class="cfg.difficulty==='normal'?'on':''" @click="cfg.difficulty='normal'">标准</button>
-                  <button class="seg-btn" :class="cfg.difficulty==='hard'?'on':''" @click="cfg.difficulty='hard'">高压</button>
+                  <button class="seg-btn" :class="cfg.difficulty==='easy'?'on':''" @click="setDifficulty('easy')">简单</button>
+                  <button class="seg-btn" :class="cfg.difficulty==='normal'?'on':''" @click="setDifficulty('normal')">标准</button>
+                  <button class="seg-btn" :class="cfg.difficulty==='hard'?'on':''" @click="setDifficulty('hard')">高压</button>
                 </div>
                 <div class="muted" style="margin-top:10px; font-size:12px;">
-                  影响题目数量、思考/回答时间、报告评价力度（UI 侧模拟）。
+                  影响思考时间：简单(30s) / 标准(20s) / 高压(10s)
                 </div>
               </div>
 
               <div class="bento-card">
-                <div class="muted2" style="font-size:12px;">面试类型</div>
-                <select class="select" v-model="cfg.type" style="margin-top:10px; width:100%;">
-                  <option value="frontend">前端</option>
-                  <option value="backend">后端</option>
-                  <option value="algo">算法</option>
-                  <option value="pm">产品</option>
+                <div class="muted2" style="font-size:12px;">面试职位</div>
+                <select class="select" v-model="cfg.jobId" style="margin-top:10px; width:100%;">
+                  <option value="0">前端开发</option>
+                  <option value="1">后端开发</option>
+                  <option value="2">测试工程师</option>
                 </select>
-                <div class="muted" style="margin-top:10px; font-size:12px;">题库来源：本地 mockQuestions（后续可换成后端题库）。</div>
+                <div class="muted" style="margin-top:10px; font-size:12px;">
+                  选择目标职位，系统会生成相关的技术问题。
+                </div>
+              </div>
+
+              <div class="bento-card">
+                <div class="muted2" style="font-size:12px;">题目数量</div>
+                <div class="row gap10 wrap" style="margin-top:10px;">
+                  <button class="pill" :class="cfg.questionCount===5?'on':''" @click="cfg.questionCount=5">5题</button>
+                  <button class="pill" :class="cfg.questionCount===8?'on':''" @click="cfg.questionCount=8">8题</button>
+                  <button class="pill" :class="cfg.questionCount===10?'on':''" @click="cfg.questionCount=10">10题</button>
+                  <button class="pill" :class="cfg.questionCount===15?'on':''" @click="cfg.questionCount=15">15题</button>
+                </div>
+                <div class="muted" style="margin-top:10px; font-size:12px;">
+                  选择面试题目数量（3-20题）
+                </div>
+              </div>
+
+              <div class="bento-card">
+                <div class="muted2" style="font-size:12px;">简历上传</div>
+                <div style="margin-top:10px;">
+                  <input type="file" 
+                         accept=".pdf,.docx,.doc,.txt,.md" 
+                         @change="handleResumeUpload"
+                         style="width:100%;" />
+                  <div v-if="resumeInfo" style="margin-top:10px;">
+                    <div class="muted" style="font-size:12px;">已上传: {{ resumeInfo.name }}</div>
+                  </div>
+                </div>
+                <div class="muted" style="margin-top:10px; font-size:12px;">
+                  上传简历后，系统会根据简历内容生成针对性的面试问题。
+                </div>
               </div>
 
               <div class="bento-card">
@@ -63,10 +93,9 @@
                     <div class="muted2" style="font-size:12px;">字幕显示</div>
                     <div style="font-weight:950; margin-top:6px;">在面试中显示面试官问题</div>
                   </div>
-                  <label class="switch">
-                    <input type="checkbox" v-model="cfg.showSubtitles" />
-                    <span class="slider"></span>
-                  </label>
+                  <div class="toggle-switch" :class="{ 'active': cfg.showSubtitles }" @click="cfg.showSubtitles = !cfg.showSubtitles">
+                    <div class="toggle-slider"></div>
+                  </div>
                 </div>
                 <div class="muted" style="margin-top:10px; font-size:12px;">
                   开启后：问题会固定显示在左侧，同时显示思考倒计时。
@@ -87,13 +116,18 @@
               <div class="bento-card">
                 <div class="muted2" style="font-size:12px;">人声（TTS）</div>
                 <select class="select" v-model="cfg.voice" style="margin-top:10px; width:100%;">
-                  <option value="zh-CN-XiaoxiaoNeural">中文女声 Xiaoxiao</option>
-                  <option value="zh-CN-YunxiNeural">中文男声 Yunxi</option>
-                  <option value="zh-CN-XiaoyiNeural">中文女声 Xiaoyi</option>
+                  <option value="alex">alex</option>
+                  <option value="anna">anna</option>
+                  <option value="bella">bella</option>
+                  <option value="benjamin">benjamin</option>
+                  <option value="charles">charles</option>
+                  <option value="claire">claire</option>
+                  <option value="david">david</option>
+                  <option value="diana">diana</option>
                 </select>
                 <div style="margin-top:10px;">
-                  <div class="muted2" style="font-size:12px;">语速：{{ cfg.rate }}</div>
-                  <input type="range" min="-20" max="20" step="5" v-model.number="ttsRateNum" style="width:100%;" />
+                  <div class="muted2" style="font-size:12px;">倍速：{{ cfg.rate }}</div>
+                  <input type="range" min="0.5" max="2.0" step="0.1" v-model.number="ttsRateNum" style="width:100%;" />
                 </div>
               </div>
 
@@ -168,7 +202,7 @@
           <!-- 底部进度信息 -->
           <div class="loading-footer">
             <div class="loading-meta">
-              <span class="meta-item">{{ labelType(cfg.type) }}</span>
+              <span class="meta-item">{{ getTypeLabel(cfg.jobId) }}</span>
               <span class="meta-dot">·</span>
               <span class="meta-item">{{ labelDifficulty(cfg.difficulty) }}</span>
               <span class="meta-dot">·</span>
@@ -283,8 +317,8 @@
         <div class="report-header">
           <div style="font-weight:950; font-size:20px;">面试报告</div>
           <div class="muted" style="margin-top:6px; font-size:12px;">
-            {{ labelType(cfg.type) }} · {{ labelDifficulty(cfg.difficulty) }} · {{ fmtTime(reportMeta.usedSec) }}
-          </div>
+              {{ getTypeLabel(cfg.jobId) }} · {{ labelDifficulty(cfg.difficulty) }} · {{ fmtTime(reportMeta.usedSec) }}
+            </div>
         </div>
 
         <div class="report-grid">
@@ -343,6 +377,21 @@
       </div>
     </div>
 
+    <!-- 简历提示弹窗 -->
+    <Transition name="alert-pop">
+      <div v-if="showResumeAlert" class="alert-backdrop" @click.self="closeResumeAlert">
+        <div class="alert-modal">
+          <div class="alert-icon" :class="resumeAlertType">
+            <span v-if="resumeAlertType === 'error'">✕</span>
+            <span v-else>✓</span>
+          </div>
+          <div class="alert-title">{{ resumeAlertMessage }}</div>
+          <div class="alert-detail">{{ resumeAlertDetail }}</div>
+          <button class="btn primary" @click="closeResumeAlert">知道了</button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 设置弹窗：点设置才出现，出现即暂停 -->
     <Modal
       :open="openSettings"
@@ -374,13 +423,18 @@
           <div class="muted2" style="font-size:12px;">人声（TTS）</div>
           <div class="row gap10 wrap" style="margin-top:10px;">
             <select class="select" v-model="cfg.voice" style="min-width:260px;">
-              <option value="zh-CN-XiaoxiaoNeural">中文女声 Xiaoxiao</option>
-              <option value="zh-CN-YunxiNeural">中文男声 Yunxi</option>
-              <option value="zh-CN-XiaoyiNeural">中文女声 Xiaoyi</option>
+              <option value="alex">alex</option>
+              <option value="anna">anna</option>
+              <option value="bella">bella</option>
+              <option value="benjamin">benjamin</option>
+              <option value="charles">charles</option>
+              <option value="claire">claire</option>
+              <option value="david">david</option>
+              <option value="diana">diana</option>
             </select>
             <div style="min-width:240px;">
-              <div class="muted2" style="font-size:12px;">语速：{{ cfg.rate }}</div>
-              <input type="range" min="-20" max="20" step="5" v-model.number="ttsRateNum" style="width:100%;" />
+              <div class="muted2" style="font-size:12px;">倍速：{{ cfg.rate }}</div>
+              <input type="range" min="0.5" max="2.0" step="0.1" v-model.number="ttsRateNum" style="width:100%;" />
             </div>
           </div>
 
@@ -402,8 +456,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Topbar from '../components/ui/Topbar.vue'
 import Modal from '../components/ui/Modal.vue'
-import CustomLoader from '../components/ui/CustomLoader.vue'
-import Live2DAvatar from '../components/Live2DAvatar.vue'
 import RadarChart from '../components/charts/RadarChart.vue'
 import BarChart from '../components/charts/BarChart.vue'
 import { QUESTION_BANK } from '../lib/mockQuestions'
@@ -416,7 +468,6 @@ const router = useRouter()
 
 // Live2D 实例（组件 ref），用于调用 speak/unlockAudio
 const avatar = ref(null)
-const avatarFloat = ref(null)
 
 // 后端连通性：仅用于"是否尝试播报"，不影响 UI 演示。
 const serverOk = ref(false)
@@ -434,27 +485,75 @@ const interviewSession = ref({
 function rand(a,b){ return Math.round(a + Math.random()*(b-a)) }
 function clamp(x){ return Math.max(45, Math.min(96, x)) }
 
+// 根据 jobId 获取面试类型
+function getTypeFromJobId(jobId) {
+  if (jobId === 0) return 'frontend'
+  if (jobId === 1) return 'backend'
+  if (jobId === 2) return 'test'
+  return 'frontend'
+}
+
+// 获取面试类型标签
+function getTypeLabel(jobId) {
+  if (jobId === 0) return '前端'
+  if (jobId === 1) return '后端'
+  if (jobId === 2) return '测试'
+  return '前端'
+}
+
 // 面试配置
 const cfg = reactive({
   difficulty: 'normal',     // easy | normal | hard
   type: 'frontend',         // frontend | backend | algo | pm
-  voice: 'zh-CN-XiaoxiaoNeural',
-  rate: '+0%',
+  voice: 'alex',
+  rate: 1.0,
   showSubtitles: true,
   thinkSeconds: 20,
   avatarPos: 'left',        // left | right | float
   jobId: 0,                 // 0: 前端, 1: 后端, 2: 测试
-  resumeText: '简历文本',    // 简历文本
-  resumeId: 1,              // 简历ID
+  resumeText: '',           // 简历文本
+  resumeId: null,           // 简历ID
   questionCount: 4           // 题目数量(3-20)
 })
 
-// 语速 range slider 的数字值（-20~20），我们把它转成 +x% 或 -x%
-const ttsRateNum = ref(0)
+// 简历信息
+const resumeInfo = ref(null)
+
+// 简历上传相关弹窗
+const showResumeAlert = ref(false)
+const resumeAlertType = ref('warning')  // 'warning' | 'error'
+const resumeAlertMessage = ref('')
+const resumeAlertDetail = ref('')
+
+function openResumeAlert(type, message, detail = '') {
+  resumeAlertType.value = type
+  resumeAlertMessage.value = message
+  resumeAlertDetail.value = detail
+  showResumeAlert.value = true
+}
+
+function closeResumeAlert() {
+  showResumeAlert.value = false
+}
+
+// 倍速 range slider 的值（0.5~2.0）
+const ttsRateNum = ref(1.0)
 watch(ttsRateNum, (v) => {
-  const n = Number(v || 0)
-  cfg.rate = `${n >= 0 ? '+' : ''}${n}%`
+  cfg.rate = Number(v || 1.0)
 })
+
+// 设置面试难度，只影响思考时间
+function setDifficulty(difficulty) {
+  cfg.difficulty = difficulty
+  // 根据难度设置思考时间
+  if (difficulty === 'easy') {
+    cfg.thinkSeconds = 30
+  } else if (difficulty === 'normal') {
+    cfg.thinkSeconds = 20
+  } else if (difficulty === 'hard') {
+    cfg.thinkSeconds = 10
+  }
+}
 
 // 根据难度给一个"建议回答时长"（UI 展示用）
 const answerLimit = computed(() => {
@@ -562,7 +661,110 @@ const currentStep = ref(0)
 const loadingSteps = ['初始化', '创建会话', '加载题目', '准备就绪']
 let loadingTimer = null
 
+// 处理简历上传
+async function handleResumeUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  // 检查文件大小（最大10MB）
+  const maxSize = 10 * 1024 * 1024 // 10MB
+  if (file.size > maxSize) {
+    openResumeAlert('error', '文件过大', '简历文件大小不能超过10MB，请选择更小的文件。')
+    return
+  }
+  
+  // 检查文件类型
+  const allowedTypes = ['.pdf', '.docx', '.doc', '.txt', '.md']
+  const fileName = file.name.toLowerCase()
+  const isValidType = allowedTypes.some(type => fileName.endsWith(type))
+  if (!isValidType) {
+    openResumeAlert('error', '文件格式不支持', `支持的格式：${allowedTypes.join('、')}，请选择正确格式的文件。`)
+    return
+  }
+  
+  try {
+    // 上传简历并获取分析结果
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch(`${API_BASE}/api/resumes/upload`, {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!response.ok) {
+      const status = response.status
+      let errorMsg = '简历上传失败'
+      let detailMsg = ''
+      
+      if (status === 400) {
+        detailMsg = '请求参数错误，请检查文件格式是否正确。'
+      } else if (status === 413) {
+        detailMsg = '文件过大，服务器无法处理。'
+      } else if (status === 429) {
+        detailMsg = '请求过于频繁，请稍后再试。'
+      } else if (status >= 500) {
+        detailMsg = '服务器内部错误，请稍后再试。'
+      } else {
+        detailMsg = `HTTP错误码：${status}`
+      }
+      
+      openResumeAlert('error', errorMsg, detailMsg)
+      // 降级处理：使用默认值
+      cfg.resumeText = '简历文本'
+      cfg.resumeId = 1
+      resumeInfo.value = { name: '默认简历', size: 0 }
+      return
+    }
+    
+    const result = await response.json()
+    const data = result.data || result
+    
+    // 检查返回数据是否有效
+    if (!data.resumeText && !data.content) {
+      openResumeAlert('warning', '简历解析异常', '无法解析简历内容，将使用默认简历继续面试。')
+    }
+    
+    // 更新配置
+    cfg.resumeText = data.resumeText || data.content || ''
+    cfg.resumeId = data.resumeId || data.id
+    resumeInfo.value = {
+      name: file.name,
+      size: file.size
+    }
+  } catch (error) {
+    console.error('简历上传失败:', error)
+    
+    // 判断网络错误类型
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      openResumeAlert('error', '网络连接失败', '无法连接到服务器，请检查网络或后端服务是否启动。')
+    } else {
+      openResumeAlert('error', '简历上传失败', error.message || '发生未知错误，请重试。')
+    }
+    
+    // 降级处理：使用默认值
+    cfg.resumeText = '简历文本'
+    cfg.resumeId = 1
+    resumeInfo.value = {
+      name: '默认简历',
+      size: 0
+    }
+  }
+}
+
 function startWithLoading(){
+  // 验证简历是否已上传
+  if (!cfg.resumeText || !cfg.resumeId) {
+    openResumeAlert('warning', '请先上传简历', '请上传您的简历后再开始面试，系统会根据简历内容生成针对性的面试问题。')
+    return
+  }
+  
+  // 验证题目数量
+  if (cfg.questionCount < 3 || cfg.questionCount > 20) {
+    openResumeAlert('warning', '题目数量超出范围', '题目数量必须在3-20之间，请重新选择。')
+    return
+  }
+  
   stage.value = 'loading'
   loadingProgress.value = 0
   const steps = [
@@ -587,7 +789,7 @@ function startWithLoading(){
       // 保存配置到 localStorage，供 InterviewRoom 使用
       localStorage.setItem('interviewConfig', JSON.stringify({
         difficulty: cfg.difficulty,
-        type: cfg.type,
+        type: getTypeFromJobId(cfg.jobId),
         voice: cfg.voice,
         rate: cfg.rate,
         showSubtitles: cfg.showSubtitles,
@@ -862,8 +1064,8 @@ async function finishInterview() {
     // 把记录写入"历史记录"
     try {
       addRecord({
-        type: cfg.type,
-        title: `${labelType(cfg.type)} · ${labelDifficulty(cfg.difficulty)} 面试`,
+        type: getTypeFromJobId(cfg.jobId),
+        title: `${getTypeLabel(cfg.jobId)} · ${labelDifficulty(cfg.difficulty)} 面试`,
         overall: evaluationResult.overall,
         dimensions: evaluationResult.dimLabels.map((k, i) => ({ k, v: evaluationResult.dimData[i] })),
         transcript: transcript.value.slice(),
@@ -888,8 +1090,8 @@ async function finishInterview() {
     // 把记录写入"历史记录"
     try {
       addRecord({
-        type: cfg.type,
-        title: `${labelType(cfg.type)} · ${labelDifficulty(cfg.difficulty)} 面试`,
+        type: getTypeFromJobId(cfg.jobId),
+        title: `${getTypeLabel(cfg.jobId)} · ${labelDifficulty(cfg.difficulty)} 面试`,
         overall: mockReport.overall,
         dimensions: mockReport.dimLabels.map((k, i) => ({ k, v: mockReport.dimData[i] })),
         transcript: transcript.value.slice(),
@@ -917,7 +1119,8 @@ async function createInterviewSession() {
         resumeText: cfg.resumeText,
         questionCount: cfg.questionCount,
         resumeId: cfg.resumeId,
-        jobId: cfg.jobId // 0:前端, 1:后端, 2:测试
+        jobId: cfg.jobId,
+        forceCreate: false
       })
     })
 
@@ -950,7 +1153,8 @@ async function createInterviewSession() {
 
 // 降级到本地题库
 function fallbackToLocalQuestions() {
-  const bank = QUESTION_BANK[cfg.type] || []
+  const type = getTypeFromJobId(cfg.jobId)
+  const bank = QUESTION_BANK[type] || []
   const shuffled = bank.slice().sort(() => Math.random() - 0.5)
   const localQuestions = shuffled.slice(0, cfg.questionCount).map(text => ({
     text,
@@ -976,12 +1180,14 @@ function fallbackToLocalQuestions() {
 async function getFollowupQuestion(answerText) {
   try {
     const session = interviewSession.value
-    const response = await fetch(`${API_BASE}/api/interview/followup`, {
+    // 使用后端正确的接口：POST /api/interview/sessions/{sessionId}/answers
+    const response = await fetch(`${API_BASE}/api/interview/sessions/${session.sessionId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sessionId: session.sessionId,
-        answer: answerText
+        questionIndex: session.currentQuestionIndex,
+        answer: answerText,
+        addQuestionIndex: session.currentFollowupIndex + 1
       })
     })
 
@@ -991,7 +1197,8 @@ async function getFollowupQuestion(answerText) {
 
     const result = await response.json()
     const data = result.data || result
-    return data.question || data.content || data.text
+    // 后端返回的追问问题在 addQuestion 或 nextQuestion 字段中
+    return data.addQuestion || data.nextQuestion || data.question || data.content || data.text || getDefaultFollowupQuestion()
   } catch (error) {
     console.error('获取追问问题失败:', error)
     // 降级到默认追问
@@ -1011,16 +1218,14 @@ function getDefaultFollowupQuestion() {
   return followups[Math.floor(Math.random() * followups.length)]
 }
 
-// 接口3：调用评价接口
+// 接口3：调用评价接口（获取面试报告）
 async function getInterviewEvaluation() {
   try {
     const session = interviewSession.value
-    const response = await fetch(`${API_BASE}/api/interview/evaluate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: session.sessionId
-      })
+    // 使用后端正确的接口：GET /api/interview/sessions/{sessionId}/report
+    const response = await fetch(`${API_BASE}/api/interview/sessions/${session.sessionId}/report`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     })
 
     if (!response.ok) {
@@ -1032,9 +1237,9 @@ async function getInterviewEvaluation() {
     
     // 适配后端返回的评价数据格式
     return {
-      overall: data.overallScore || data.score || data.overall,
-      summary: data.summary || data.feedback || data.comment,
-      weakness: data.weaknesses || data.weakness || [],
+      overall: data.overallScore || data.score || data.overall || data.totalScore,
+      summary: data.summary || data.feedback || data.comment || data.overallComment,
+      weakness: data.weaknesses || data.weakness || data.improvements || [],
       dimLabels: data.dimensionLabels || data.dimensions?.map(d => d.name) || ['沟通表达', '技术深度', '结构化思维', '项目经验', '加分项'],
       dimData: data.dimensionScores || data.dimensions?.map(d => d.score) || [75, 80, 78, 82, 76],
       qLabels: data.questionLabels || data.questions?.map((_, i) => `Q${i+1}`) || [],
@@ -1257,52 +1462,38 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-.switch {
+/* 新的滑键按钮样式 */
+.toggle-switch {
   position: relative;
   display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  width: 50px;
+  height: 26px;
   background-color: var(--card-2);
   border: 1px solid var(--stroke);
-  transition: .3s;
-  border-radius: 24px;
+  border-radius: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 2px;
-  bottom: 2px;
-  background-color: white;
-  transition: .3s;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,.2);
-}
-
-input:checked + .slider {
+.toggle-switch.active {
   background-color: var(--brand);
   border-color: var(--brand);
 }
 
-input:checked + .slider:before {
-  transform: translateX(20px);
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: all 0.3s ease;
+}
+
+.toggle-switch.active .toggle-slider {
+  transform: translateX(22px);
 }
 
 /* =========================

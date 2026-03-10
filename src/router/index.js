@@ -4,7 +4,8 @@ import { isAuthed } from '../lib/auth'
 import Auth from '../pages/Auth.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
-import Home from '../pages/Home.vue'
+import WindmillHome from '../pages/WindmillHome.vue'
+import Dashboard from '../pages/Dashboard.vue'
 import Interview from '../pages/Interview.vue'
 import InterviewRoom from '../pages/InterviewRoom.vue'
 import Records from '../pages/Records.vue'
@@ -28,7 +29,8 @@ const router = createRouter({
       component: AppLayout,
       children: [
         { path: '', redirect: '/app/home' },
-        { path: 'home', component: Home, meta: { title: '工作台' } },
+        { path: 'home', component: WindmillHome, meta: { title: '主页' } },
+        { path: 'dashboard', component: Dashboard, meta: { title: '工作台' } },
         { path: 'interview', component: Interview, meta: { title: '开始面试' } },
         { path: 'records', component: Records, meta: { title: '面试记录' } },
         { path: 'analytics', component: Analytics, meta: { title: '面试统计' } },

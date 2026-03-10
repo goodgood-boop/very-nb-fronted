@@ -104,13 +104,18 @@
           <div class="muted2" style="font-size:12px;">人声（TTS）</div>
           <div class="row gap10 wrap" style="margin-top:10px;">
             <select class="select" v-model="cfg.voice" style="min-width:260px;">
-              <option value="zh-CN-XiaoxiaoNeural">中文女声 Xiaoxiao</option>
-              <option value="zh-CN-YunxiNeural">中文男声 Yunxi</option>
-              <option value="zh-CN-XiaoyiNeural">中文女声 Xiaoyi</option>
+              <option value="alex">alex</option>
+              <option value="anna">anna</option>
+              <option value="bella">bella</option>
+              <option value="benjamin">benjamin</option>
+              <option value="charles">charles</option>
+              <option value="claire">claire</option>
+              <option value="david">david</option>
+              <option value="diana">diana</option>
             </select>
             <div style="min-width:240px;">
-              <div class="muted2" style="font-size:12px;">语速：{{ cfg.rate }}</div>
-              <input type="range" min="-20" max="20" step="5" v-model.number="ttsRateNum" style="width:100%;" />
+              <div class="muted2" style="font-size:12px;">倍速：{{ cfg.rate }}</div>
+              <input type="range" min="0.5" max="2.0" step="0.1" v-model.number="ttsRateNum" style="width:100%;" />
             </div>
           </div>
 
@@ -167,8 +172,8 @@ const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
 const cfg = reactive({
   difficulty: savedConfig.difficulty || 'normal',     // easy | normal | hard
   type: savedConfig.type || 'frontend',               // frontend | backend | algo | pm
-  voice: savedConfig.voice || 'zh-CN-XiaoxiaoNeural',
-  rate: savedConfig.rate || '+0%',
+  voice: savedConfig.voice || 'alex',
+  rate: savedConfig.rate || 1.0,
   showSubtitles: savedConfig.showSubtitles !== undefined ? savedConfig.showSubtitles : true,
   thinkSeconds: savedConfig.thinkSeconds || 20,
   avatarPos: savedConfig.avatarPos || 'left',         // left | right | float
@@ -178,11 +183,10 @@ const cfg = reactive({
   questionCount: savedConfig.questionCount || 4       // 题目数量(3-20)
 })
 
-// 语速 range slider 的数字值（-20~20），我们把它转成 +x% 或 -x%
-const ttsRateNum = ref(0)
+// 倍速 range slider 的值（0.5~2.0）
+const ttsRateNum = ref(1.0)
 watch(ttsRateNum, (v) => {
-  const n = Number(v || 0)
-  cfg.rate = `${n >= 0 ? '+' : ''}${n}%`
+  cfg.rate = Number(v || 1.0)
 })
 
 // 根据难度给一个"建议回答时长"（UI 展示用）
@@ -289,16 +293,14 @@ function fmt(sec){
   return `${mm}:${ss}`
 }
 
-// 接口3：调用评价接口
+// 接口3：调用评价接口（获取面试报告）
 async function getInterviewEvaluation() {
   try {
     const session = interviewSession.value
-    const response = await fetch(`${API_BASE}/api/interview/evaluate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: session.sessionId
-      })
+    // 使用后端正确的接口：GET /api/interview/sessions/{sessionId}/report
+    const response = await fetch(`${API_BASE}/api/interview/sessions/${session.sessionId}/report`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
     })
 
     if (!response.ok) {
@@ -310,9 +312,9 @@ async function getInterviewEvaluation() {
     
     // 适配后端返回的评价数据格式
     return {
-      overall: data.overallScore || data.score || data.overall,
-      summary: data.summary || data.feedback || data.comment,
-      weakness: data.weaknesses || data.weakness || [],
+      overall: data.overallScore || data.score || data.overall || data.totalScore,
+      summary: data.summary || data.feedback || data.comment || data.overallComment,
+      weakness: data.weaknesses || data.weakness || data.improvements || [],
       dimLabels: data.dimensionLabels || data.dimensions?.map(d => d.name) || ['沟通表达', '技术深度', '结构化思维', '项目经验', '加分项'],
       dimData: data.dimensionScores || data.dimensions?.map(d => d.score) || [75, 80, 78, 82, 76],
       qLabels: data.questionLabels || data.questions?.map((_, i) => `Q${i+1}`) || [],
@@ -462,12 +464,14 @@ function fallbackToLocalQuestions() {
 async function getFollowupQuestion(answerText) {
   try {
     const session = interviewSession.value
-    const response = await fetch(`${API_BASE}/api/interview/followup`, {
+    // 使用后端正确的接口：POST /api/interview/sessions/{sessionId}/answers
+    const response = await fetch(`${API_BASE}/api/interview/sessions/${session.sessionId}/answers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sessionId: session.sessionId,
-        answer: answerText
+        questionIndex: session.currentQuestionIndex,
+        answer: answerText,
+        addQuestionIndex: session.currentFollowupIndex + 1
       })
     })
 
@@ -477,7 +481,8 @@ async function getFollowupQuestion(answerText) {
 
     const result = await response.json()
     const data = result.data || result
-    return data.question || data.content || data.text
+    // 后端返回的追问问题在 addQuestion 或 nextQuestion 字段中
+    return data.addQuestion || data.nextQuestion || data.question || data.content || data.text || getDefaultFollowupQuestion()
   } catch (error) {
     console.error('获取追问问题失败:', error)
     // 降级到默认追问
@@ -593,9 +598,9 @@ async function testSpeak(){
 async function transcribeAudio(audioBlob) {
   try {
     const formData = new FormData()
-    formData.append('audio', audioBlob, 'recording.wav')
+    formData.append('file', audioBlob, 'recording.wav')
     
-    const response = await fetch(`${API_BASE}/api/stt`, {
+    const response = await fetch(`${API_BASE}/api/interview/sessions/asr`, {
       method: 'POST',
       body: formData
     })

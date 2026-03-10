@@ -342,7 +342,7 @@ async function speak(text, voice = 'zh-CN-XiaoxiaoNeural', rate = '+0%') {
   rafId = null
 
   // 1) request TTS
-  const resp = await fetch(`${API_BASE}/api/tts`, {
+  const resp = await fetch(`${API_BASE}/api/interview/sessions/tts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: t, voice, rate }),

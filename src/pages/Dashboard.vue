@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="dashboard-container">
     <Topbar
       title="工作台"
       subtitle="快速入口 + 最近表现概览（UI-only，本地 mock 数据）。"
@@ -91,6 +91,57 @@
     </div>
   </div>
 </template>
+
+<style scoped>
+.dashboard-container {
+  min-height: 100vh;
+  /* Matching the WindmillHome background style */
+  background: linear-gradient(to bottom, #E0F7FA 0%, #f5f7ff 100%); 
+}
+
+/* Override cards to match the lighter theme */
+:deep(.card) {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+:deep(.muted) {
+  color: #666;
+}
+
+:deep(.muted2) {
+  color: #888;
+}
+
+:deep(.btn) {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+:deep(.btn:hover) {
+  background: #fff;
+  border-color: #bbb;
+}
+
+:deep(.btn.primary) {
+  background: #4caf50; /* Greenish to match nature theme */
+  color: white;
+  border: none;
+}
+
+:deep(.btn.primary:hover) {
+  background: #43a047;
+}
+
+:deep(.badge) {
+  background: rgba(76, 175, 80, 0.1);
+  color: #2e7d32;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+</style>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
