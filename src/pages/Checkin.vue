@@ -1,16 +1,16 @@
 <template>
-  <div>
+  <div class="page-with-bg">
     <Topbar
       title="打卡中心"
       subtitle="每天打卡一次，形成学习习惯；连续打卡可解锁头像挂件与勋章（纯前端/本地存储演示）。"
     >
       <!-- 顶部右侧：快捷按钮（保持页面轻量） -->
-      <button class="btn primary" :disabled="!canToday" @click="onCheckin">
+      <button class="btn primary btn-glow" :disabled="!canToday" @click="onCheckin">
         {{ canToday ? '今日打卡' : '已打卡' }}
       </button>
     </Topbar>
 
-    <div class="container">
+    <div class="container page-content">
       <!-- Bento 风格：左侧状态 + 右侧日历（更“别出心裁”，但不影响原有功能） -->
       <div class="bento">
         <!-- A) 今日状态/连续天数 -->
@@ -166,7 +166,7 @@
  * - 每次打卡/装备后，重新读取并覆盖 stateRef，从而触发 Vue 的响应式刷新
  */
 
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import dayjs from 'dayjs'
 import Topbar from '../components/ui/Topbar.vue'
 import { currentUser } from '../lib/auth'
@@ -291,4 +291,15 @@ function nextMonth() {
   monthCursor.value = monthCursor.value.add(1, 'month').startOf('month')
 }
 
+onMounted(() => {
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
+})
 </script>

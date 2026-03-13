@@ -1,11 +1,11 @@
 <template>
-  <div>
+  <div class="page-with-bg">
     <Topbar
       title="设置"
       subtitle="主题/偏好/快捷键/关于等（示例）。"
     />
 
-    <div class="container">
+    <div class="container page-content">
       <div class="grid2">
         <div class="card" style="padding:12px 14px;">
           <div style="font-weight:950;">偏好设置（示例）</div>
@@ -21,9 +21,14 @@
             <span>显示引导提示</span>
           </label>
 
+          <label class="row gap10 center" style="margin-top:10px;">
+            <input type="checkbox" v-model="pref.darkMode" @change="toggleTheme" />
+            <span>深色模式</span>
+          </label>
+
           <div class="row gap10 wrap" style="margin-top:12px;">
-            <button class="btn primary" @click="save">保存</button>
-            <button class="btn" @click="reset">恢复默认</button>
+            <button class="btn primary btn-glow" @click="save">保存</button>
+            <button class="btn btn-glow" @click="reset">恢复默认</button>
           </div>
 
           <div class="muted2" style="margin-top:10px;" v-if="msg">{{ msg }}</div>
@@ -48,13 +53,21 @@
 </template>
 
 <script setup>
-import { ref, watchEffect } from 'vue'
+import { ref, watchEffect, onMounted } from 'vue'
 import Topbar from '../components/ui/Topbar.vue'
 import { lsGet, lsSet } from '../lib/storage'
 
 const KEY = 'ai_prefs'
-const pref = ref(lsGet(KEY, { autoSeed: true, showTips: true }))
+const pref = ref(lsGet(KEY, { autoSeed: true, showTips: true, darkMode: false }))
 const msg = ref('')
+
+function toggleTheme() {
+  if (pref.value.darkMode) {
+    document.body.classList.add('night-theme')
+  } else {
+    document.body.classList.remove('night-theme')
+  }
+}
 
 function save(){
   lsSet(KEY, pref.value)
@@ -66,4 +79,20 @@ function reset(){
   pref.value = { autoSeed: true, showTips: true }
   save()
 }
+
+onMounted(() => {
+  if (pref.value.darkMode) {
+    document.body.classList.add('night-theme')
+  }
+  
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
+})
 </script>

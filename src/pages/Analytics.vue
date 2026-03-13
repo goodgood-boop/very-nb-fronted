@@ -1,11 +1,11 @@
 <template>
-  <div>
+  <div class="page-with-bg">
     <Topbar
       title="面试统计"
       subtitle="用可视化观察分数走势与能力画像（来自本地记录）。"
     />
 
-    <div class="container">
+    <div class="container page-content">
       <div class="grid2">
         <div class="card" style="padding:12px 14px;">
           <div class="row space center">
@@ -13,7 +13,7 @@
               <div style="font-weight:950;">总分走势</div>
               <div class="muted2" style="font-size:12px; margin-top:4px;">折线：原始分数；平滑线：3 次滑动平均</div>
             </div>
-            <button class="btn" @click="seed">生成示例数据</button>
+            <button class="btn btn-glow" @click="seed">生成示例数据</button>
           </div>
           <div style="margin-top:12px;">
             <LineChart :labels="labels" :data="scores" title="Score" />
@@ -61,7 +61,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import Topbar from '../components/ui/Topbar.vue'
 import LineChart from '../components/charts/LineChart.vue'
 import BarChart from '../components/charts/BarChart.vue'
@@ -83,4 +83,16 @@ const lastDimLabels = computed(() => last.value?.dimensions?.map(d=>d.k) || [])
 const lastDimValues = computed(() => last.value?.dimensions?.map(d=>d.v) || [])
 
 function seed(){ seedRecordsIfEmpty() }
+
+onMounted(() => {
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
+})
 </script>

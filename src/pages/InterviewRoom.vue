@@ -1,5 +1,5 @@
 <template>
-  <div class="interview-room">
+  <div class="interview-room page-with-bg">
     <!-- 右上角：暂停/设置（极简） -->
     <div class="room-corner">
       <button class="icon-btn" @click="togglePause" :title="paused ? '继续' : '暂停'">
@@ -19,19 +19,42 @@
       </div>
     </div>
 
-    <!-- 聊天区域：问题在左，回答在右 -->
+    <!-- 问题进度提醒 - 完全按照 EchoMind-feature- 样式 -->
+    <div v-if="interviewSession.questions.length > 0 && currentQuestionObj.question" class="question-progress-panel">
+      <div class="progress-header">
+        <span class="progress-title">
+          题目 {{ currentQuestionObj.questionIndex + 1 }} / {{ interviewSession.questions.length }}
+        </span>
+        <span class="progress-percent">{{ Math.round(progressPercent) }}%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+      </div>
+    </div>
+
+    <!-- 聊天区域：QQ/微信风格 - 单列表，新消息从底部添加 -->
     <div class="chat-area">
-      <div class="chat-messages" ref="chatScroll">
-        <div 
-          v-for="m in allMessages" 
-          :key="m.id" 
-          class="message-row"
-          :class="m.role === 'interviewer' ? 'left' : 'right'"
-        >
-          <div class="message-bubble" :class="m.role">
-            {{ m.text }}
+      <div class="chat-messages" ref="chatMessagesRef">
+        <!-- 消息列表 -->
+        <div class="messages-container">
+          <div 
+            v-for="(m, index) in allMessages" 
+            :key="m.id" 
+            class="message-row"
+            :class="m.role"
+          >
+            <div class="message-bubble" :class="m.role">
+              <div class="message-sender">{{ m.role === 'interviewer' ? '面试官' : '我' }}</div>
+              <div class="message-text">{{ m.text }}</div>
+            </div>
+          </div>
+          <div v-if="allMessages.length === 0" class="chat-placeholder">
+            <div class="placeholder-icon">💬</div>
+            <div>面试即将开始，请做好准备...</div>
           </div>
         </div>
+        <!-- 滚动锚点 -->
+        <div ref="scrollAnchor" class="scroll-anchor"></div>
       </div>
     </div>
 
@@ -120,12 +143,39 @@
           </div>
 
           <div class="row gap10 wrap" style="margin-top:12px;">
-            <button class="btn ghost" @click="unlock">解锁音频</button>
-            <button class="btn" @click="testSpeak">试播</button>
+            <button class="btn ghost btn-glow" @click="unlock">解锁音频</button>
+            <button class="btn btn-glow" @click="testSpeak">试播</button>
             <div style="flex:1;"></div>
-            <button class="btn danger" @click="finishInterview">结束面试</button>
-            <button class="btn primary" @click="applySettings">保存并继续</button>
+            <button class="btn danger btn-glow" @click="showCompleteConfirm=true">结束面试</button>
+            <button class="btn primary btn-glow" @click="applySettings">保存并继续</button>
           </div>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- 提前交卷确认对话框 -->
+    <Modal
+      :open="showCompleteConfirm"
+      title="提前交卷"
+      subtitle="确定要提前交卷吗？未回答的问题将按0分计算。"
+      @close="showCompleteConfirm=false"
+    >
+      <div class="card soft" style="padding:20px;">
+        <div class="row gap10" style="justify-content: flex-end;">
+          <button 
+            class="btn ghost" 
+            @click="showCompleteConfirm=false"
+            :disabled="isSubmitting"
+          >
+            取消
+          </button>
+          <button 
+            class="btn danger" 
+            @click="finishInterview"
+            :disabled="isSubmitting"
+          >
+            {{ isSubmitting ? '提交中...' : '确定交卷' }}
+          </button>
         </div>
       </div>
     </Modal>
@@ -139,9 +189,11 @@ import Modal from '../components/ui/Modal.vue'
 import Live2DAvatar from '../components/Live2DAvatar.vue'
 import { QUESTION_BANK } from '../lib/mockQuestions'
 import { addRecord, labelType } from '../lib/records'
+import { interviewApi } from '../api/interview.js'
 
-// 沿用原项目的后端地址
-const API_BASE = 'http://127.0.0.1:8000'
+// EchoMind-37a 后端地址
+// 后端已配置 CORS，直接使用完整 URL
+const API_BASE = 'http://113.54.240.73:8080'
 
 const router = useRouter()
 const route = useRoute()
@@ -152,7 +204,7 @@ const avatar = ref(null)
 // 后端连通性：仅用于"是否尝试播报"，不影响 UI 演示。
 const serverOk = ref(false)
 
-// 面试会话信息
+// 面试会话信息 - 完全照抄 EchoMind-feature- 的结构
 const interviewSession = ref({
   sessionId: '',
   jobId: 0, // 0: 前端, 1: 后端, 2: 测试
@@ -161,26 +213,40 @@ const interviewSession = ref({
   currentFollowupIndex: 0 // 0-1，每个主问题有两个追问
 })
 
+// 当前问题（完全照抄 EchoMind-feature- 的 currentQuestion 结构）
+const currentQuestionObj = ref({
+  questionIndex: 0,
+  question: '',
+  type: '',
+  category: '',
+  addQuestionIndex: 0
+})
+
 // 辅助函数
 function rand(a,b){ return Math.round(a + Math.random()*(b-a)) }
 function clamp(x){ return Math.max(45, Math.min(96, x)) }
 
-// 从 localStorage 读取面试配置
+// 从 URL 查询参数读取配置（从简历分析页面传入）
+const routeQuery = route.query
+
+// 从 localStorage 读取面试配置（作为后备）
 const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
 
-// 面试配置
+// 面试配置 - 优先使用 URL 参数，其次是 localStorage，最后是默认值
 const cfg = reactive({
-  difficulty: savedConfig.difficulty || 'normal',     // easy | normal | hard
-  type: savedConfig.type || 'frontend',               // frontend | backend | algo | pm
-  voice: savedConfig.voice || 'alex',
-  rate: savedConfig.rate || 1.0,
-  showSubtitles: savedConfig.showSubtitles !== undefined ? savedConfig.showSubtitles : true,
-  thinkSeconds: savedConfig.thinkSeconds || 20,
-  avatarPos: savedConfig.avatarPos || 'left',         // left | right | float
-  jobId: savedConfig.jobId !== undefined ? savedConfig.jobId : 0,  // 0: 前端, 1: 后端, 2: 测试
-  resumeText: savedConfig.resumeText || '简历文本',    // 简历文本
-  resumeId: savedConfig.resumeId || 1,                // 简历ID
-  questionCount: savedConfig.questionCount || 4       // 题目数量(3-20)
+  difficulty: routeQuery.difficulty || savedConfig.difficulty || 'normal',     // easy | normal | hard
+  type: routeQuery.type || savedConfig.type || 'frontend',               // frontend | backend | algo | pm
+  voice: routeQuery.voice || savedConfig.voice || 'alex',
+  rate: routeQuery.rate ? parseFloat(routeQuery.rate) : (savedConfig.rate || 1.0),
+  showSubtitles: routeQuery.showSubtitles !== undefined 
+    ? routeQuery.showSubtitles === 'true' 
+    : (savedConfig.showSubtitles !== undefined ? savedConfig.showSubtitles : true),
+  thinkSeconds: routeQuery.thinkSeconds ? parseInt(routeQuery.thinkSeconds) : (savedConfig.thinkSeconds || 20),
+  avatarPos: routeQuery.avatarPos || savedConfig.avatarPos || 'left',         // left | right | float
+  jobId: routeQuery.jobId !== undefined ? parseInt(routeQuery.jobId) : (savedConfig.jobId !== undefined ? savedConfig.jobId : 0),  // 0: 前端, 1: 后端, 2: 测试
+  resumeText: routeQuery.resumeText || savedConfig.resumeText || '简历文本',    // 简历文本
+  resumeId: routeQuery.resumeId ? parseInt(routeQuery.resumeId) : (savedConfig.resumeId || 1),                // 简历ID
+  questionCount: routeQuery.questionCount ? parseInt(routeQuery.questionCount) : (savedConfig.questionCount || 8)       // 题目数量(4-20)
 })
 
 // 倍速 range slider 的值（0.5~2.0）
@@ -207,7 +273,11 @@ const speaking = ref(false)
 // 面试题与对话
 const transcript = ref([]) // { id, role:'interviewer'|'candidate', text }
 
-// 合并所有消息用于显示
+// QQ风格：左右分列的消息
+const qMsgs = computed(() => transcript.value.filter(m => m.role === 'interviewer'))
+const aMsgs = computed(() => transcript.value.filter(m => m.role === 'candidate'))
+
+// 合并所有消息用于显示（兼容旧代码）
 const allMessages = computed(() => {
   return [...transcript.value].sort((a, b) => {
     // 从id中提取时间戳进行比较
@@ -219,16 +289,15 @@ const allMessages = computed(() => {
 
 const draft = ref('')
 
+// 当前问题显示文本
 const currentQuestion = computed(() => {
-  const session = interviewSession.value
-  if (session.currentFollowupIndex === 0) {
-    // 主问题
-    return session.questions[session.currentQuestionIndex]?.text || '请做一个自我介绍。'
-  } else {
-    // 追问问题（从追问列表中获取）
-    const mainQ = session.questions[session.currentQuestionIndex]
-    return mainQ?.followupQuestions?.[session.currentFollowupIndex - 1] || ''
-  }
+  return currentQuestionObj.value.question || '请做一个自我介绍。'
+})
+
+// 进度百分比 - 完全按照 EchoMind-feature- 计算
+const progressPercent = computed(() => {
+  if (!interviewSession.value.questions.length || !currentQuestionObj.value.question) return 0
+  return ((currentQuestionObj.value.questionIndex + 1) / interviewSession.value.questions.length) * 100
 })
 
 // room 阶段：分成 3 个相位
@@ -258,17 +327,36 @@ watch(openSettings, (v) => {
   }
 })
 
+// 提前交卷确认对话框
+const showCompleteConfirm = ref(false)
+const isSubmitting = ref(false)
+
 // 聊天滚动区域
+const chatMessagesRef = ref(null)
+const scrollAnchor = ref(null)
 const chatScroll = ref(null)
 
-// 自动滚动到底部
+// 自动滚动到底部（使用滚动锚点）
 function scrollToBottom() {
   nextTick(() => {
+    // 使用滚动锚点自动滚动到底部
+    if (scrollAnchor.value) {
+      scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+    // 兼容旧代码
     if (chatScroll.value) {
       chatScroll.value.scrollTop = chatScroll.value.scrollHeight
     }
+    if (chatMessagesRef.value) {
+      chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
+    }
   })
 }
+
+// 监听消息变化，自动滚动
+watch(() => transcript.value.length, () => {
+  scrollToBottom()
+}, { flush: 'post' })
 
 const canAnswer = computed(() => !paused.value && phase.value==='answering')
 
@@ -293,33 +381,25 @@ function fmt(sec){
   return `${mm}:${ss}`
 }
 
-// 接口3：调用评价接口（获取面试报告）
+// 使用新的API模块获取面试报告
 async function getInterviewEvaluation() {
   try {
     const session = interviewSession.value
-    // 使用后端正确的接口：GET /api/interview/sessions/{sessionId}/report
-    const response = await fetch(`${API_BASE}/api/interview/sessions/${session.sessionId}/report`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-
-    if (!response.ok) {
-      throw new Error(`获取评价失败: ${response.status}`)
-    }
-
-    const result = await response.json()
-    const data = result.data || result
+    // 使用新的API模块
+    const data = await interviewApi.getReport(session.sessionId)
     
-    // 适配后端返回的评价数据格式
+    // 适配后端InterviewReportDTO格式
     return {
-      overall: data.overallScore || data.score || data.overall || data.totalScore,
-      summary: data.summary || data.feedback || data.comment || data.overallComment,
-      weakness: data.weaknesses || data.weakness || data.improvements || [],
-      dimLabels: data.dimensionLabels || data.dimensions?.map(d => d.name) || ['沟通表达', '技术深度', '结构化思维', '项目经验', '加分项'],
-      dimData: data.dimensionScores || data.dimensions?.map(d => d.score) || [75, 80, 78, 82, 76],
-      qLabels: data.questionLabels || data.questions?.map((_, i) => `Q${i+1}`) || [],
-      qScores: data.questionScores || data.questions?.map(q => q.score) || [],
-      questions: data.questions || []
+      overall: data.overallScore,
+      summary: data.overallFeedback,
+      weakness: data.improvements || [],
+      strengths: data.strengths || [],
+      dimLabels: data.categoryScores?.map(d => d.category) || [],
+      dimData: data.categoryScores?.map(d => d.score) || [],
+      qLabels: data.questionDetails?.map((_, i) => `Q${i+1}`) || [],
+      qScores: data.questionDetails?.map(q => q.score) || [],
+      questionDetails: data.questionDetails || [],
+      referenceAnswers: data.referenceAnswers || []
     }
   } catch (error) {
     throw error
@@ -382,7 +462,7 @@ function generateMockReport() {
 // 后端检测 / 音频解锁
 async function checkServer(){
   try {
-    const r = await fetch(`${API_BASE}/ping`, { cache: 'no-store' })
+    const r = await fetch(`${API_BASE}/api/resumes/health`, { cache: 'no-store' })
     serverOk.value = r.ok
   } catch {
     serverOk.value = false
@@ -395,36 +475,30 @@ function unlock(){
   try { avatar.value?.unlockAudio?.() } catch {}
 }
 
-// 接口1：创建面试会话（获取主问题列表）
+// 使用新的API模块创建面试会话
 async function createInterviewSession() {
   try {
-    const response = await fetch(`${API_BASE}/api/interview/sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        resumeText: cfg.resumeText,
-        questionCount: cfg.questionCount,
-        resumeId: cfg.resumeId,
-        jobId: cfg.jobId // 0:前端, 1:后端, 2:测试
-      })
+    // 使用新的API模块 - 完全照抄 EchoMind-feature-
+    const data = await interviewApi.createSession({
+      resumeText: cfg.resumeText,
+      questionCount: cfg.questionCount,
+      resumeId: cfg.resumeId,
+      jobId: cfg.jobId,
+      forceCreate: true
     })
-
-    if (!response.ok) {
-      throw new Error(`创建面试会话失败: ${response.status}`)
-    }
-
-    const result = await response.json()
-    const data = result.data || result
     
     // 保存会话信息
     interviewSession.value = {
       sessionId: data.sessionId,
       jobId: data.jobId,
       questions: data.questions.map(q => ({
-        text: q.content || q.text || q.question,
-        followupQuestions: [] // 预留追问问题数组
+        text: q.question,
+        category: q.category,
+        type: q.type,
+        questionIndex: q.questionIndex,
+        followupQuestions: []
       })),
-      currentQuestionIndex: 0,
+      currentQuestionIndex: data.currentQuestionIndex || 0,
       currentFollowupIndex: 0
     }
 
@@ -460,32 +534,39 @@ function fallbackToLocalQuestions() {
   }
 }
 
-// 接口2：获取追问问题
-async function getFollowupQuestion(answerText) {
+// 使用新的API模块提交答案并获取下一题 - 完全照抄 EchoMind-feature-
+async function submitAnswerAndGetNext(answerText) {
   try {
     const session = interviewSession.value
-    // 使用后端正确的接口：POST /api/interview/sessions/{sessionId}/answers
-    const response = await fetch(`${API_BASE}/api/interview/sessions/${session.sessionId}/answers`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        questionIndex: session.currentQuestionIndex,
-        answer: answerText,
-        addQuestionIndex: session.currentFollowupIndex + 1
-      })
+    const currentQ = currentQuestionObj.value
+    
+    // 使用新的API模块 - 完全照抄 EchoMind-feature-
+    const response = await interviewApi.submitAnswer({
+      sessionId: session.sessionId,
+      questionIndex: currentQ.questionIndex,
+      answer: answerText,
+      addQuestionIndex: currentQ.addQuestionIndex || 0
     })
-
-    if (!response.ok) {
-      throw new Error(`获取追问问题失败: ${response.status}`)
+    
+    // 完全照抄 EchoMind-feature- 的处理逻辑
+    if (response.hasNextQuestion && response.nextQuestion) {
+      // 后端返回了下一题（可能是追问或新的主问题）
+      // 为了让下一次提交能正确传递 addQuestionIndex，写回 currentQuestionObj
+      // 注意：后端追问次数字段在 response 上叫 addQuestionIndex
+      const normalizedNextQuestion = {
+        ...response.nextQuestion,
+        isFollowUp: response.addQuestionIndex === 0 ? false : true,
+        addQuestionIndex: response.addQuestionIndex ?? response.nextQuestion.addQuestionIndex ?? 0,
+      }
+      currentQuestionObj.value = normalizedNextQuestion
+      return response.nextQuestion.question
+    } else {
+      // 面试已完成
+      return null
     }
-
-    const result = await response.json()
-    const data = result.data || result
-    // 后端返回的追问问题在 addQuestion 或 nextQuestion 字段中
-    return data.addQuestion || data.nextQuestion || data.question || data.content || data.text || getDefaultFollowupQuestion()
   } catch (error) {
-    console.error('获取追问问题失败:', error)
-    // 降级到默认追问
+    console.error('提交答案失败:', error)
+    // 降级到本地追问
     return getDefaultFollowupQuestion()
   }
 }
@@ -502,7 +583,7 @@ function getDefaultFollowupQuestion() {
   return followups[Math.floor(Math.random() * followups.length)]
 }
 
-// 初始化面试
+// 初始化面试 - 完全照抄 EchoMind-feature-
 async function initInterview() {
   transcript.value = []
   draft.value = ''
@@ -510,8 +591,40 @@ async function initInterview() {
   subtitle.value = ''
   speaking.value = false
 
-  // 调用接口1创建面试会话
-  await createInterviewSession()
+  // 从localStorage读取sessionId和问题列表，避免重复创建会话
+  const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
+  if (savedConfig.sessionId && savedConfig.questions) {
+    interviewSession.value.sessionId = savedConfig.sessionId
+    interviewSession.value.questions = savedConfig.questions
+    interviewSession.value.currentQuestionIndex = savedConfig.currentQuestionIndex || 0
+    
+    // 初始化 currentQuestionObj 为第一题
+    const firstQuestion = savedConfig.questions[0]
+    if (firstQuestion) {
+      currentQuestionObj.value = {
+        questionIndex: firstQuestion.questionIndex || 0,
+        question: firstQuestion.text || firstQuestion.question || '',
+        type: firstQuestion.type || '',
+        category: firstQuestion.category || '',
+        addQuestionIndex: 0
+      }
+    }
+  } else {
+    // 如果没有sessionId或问题列表，才创建新会话
+    const data = await createInterviewSession()
+    
+    // 初始化 currentQuestionObj 为第一题
+    if (data.questions && data.questions.length > 0) {
+      const firstQuestion = data.questions[0]
+      currentQuestionObj.value = {
+        questionIndex: firstQuestion.questionIndex || 0,
+        question: firstQuestion.question || '',
+        type: firstQuestion.type || '',
+        category: firstQuestion.category || '',
+        addQuestionIndex: 0
+      }
+    }
+  }
   
   paused.value = false
 
@@ -525,7 +638,13 @@ async function initInterview() {
 // 3) 进入 thinking 倒计时
 async function ask(text){
   phase.value = 'asking'
-  transcript.value.push({ id: `${Date.now()}-${Math.random()}`, role: 'interviewer', text })
+  const currentQ = currentQuestionObj.value
+  transcript.value.push({ 
+    id: `${Date.now()}-${Math.random()}`, 
+    role: 'interviewer', 
+    text, 
+    category: currentQ.isFollowUp ? `追问(${currentQ.addQuestionIndex || 0})` : currentQ.category 
+  })
   scrollToBottom()
 
   // 如果后端连通（serverOk），并且 Live2DAvatar 提供 speak()，才尝试播报。
@@ -594,7 +713,7 @@ async function testSpeak(){
   }
 }
 
-// 语音识别：调用STT接口
+// 语音识别：调用ASR接口
 async function transcribeAudio(audioBlob) {
   try {
     const formData = new FormData()
@@ -610,8 +729,11 @@ async function transcribeAudio(audioBlob) {
     }
     
     const result = await response.json()
-    const data = result.data || result
-    return data.text || data.content || data.transcript
+    if (result.success && result.result) {
+      return result.result
+    } else {
+      throw new Error(`语音识别失败: ${result.msg}`)
+    }
   } catch (error) {
     console.error('语音识别失败:', error)
     // 降级到显示时长
@@ -686,93 +808,64 @@ async function stopRecording() {
 function commitText(){
   const t = String(draft.value || '').trim() || '（未填写回答）'
   draft.value = ''
-  pushAnswerAndNext(t)
+  handleSubmitAnswer(t)
 }
 
-// 提交回答并进入下一个问题
-async function pushAnswerAndNext(answerText) {
+// 统一的答案提交处理 - 完全照抄 EchoMind-feature-
+async function handleSubmitAnswer(answerText) {
+  // 添加用户消息到聊天记录
   transcript.value.push({ id: `${Date.now()}-${Math.random()}`, role: 'candidate', text: answerText })
   scrollToBottom()
   
   // 停止计时器
   stopTimers()
   
-  // 检查是否需要追问
-  const session = interviewSession.value
-  if (session.currentFollowupIndex < 2) {
-    // 获取追问问题
-    const followupQuestion = await getFollowupQuestion(answerText)
-    
-    // 保存追问问题
-    session.questions[session.currentQuestionIndex].followupQuestions.push(followupQuestion)
-    
-    // 增加追问索引
-    session.currentFollowupIndex += 1
-    
-    // 问追问问题
-    await ask(followupQuestion)
+  // 使用新的API模块提交答案并获取下一题
+  const nextQuestionText = await submitAnswerAndGetNext(answerText)
+  
+  if (nextQuestionText) {
+    // 还有下一题，继续问
+    await ask(nextQuestionText)
   } else {
-    // 所有追问都问完了，进入下一个主问题
-    session.currentQuestionIndex += 1
-    session.currentFollowupIndex = 0
-    
-    if (session.currentQuestionIndex < session.questions.length) {
-      // 还有主问题，继续问
-      await ask(currentQuestion.value)
-    } else {
-      // 所有问题都问完了，结束面试
-      await finishInterview()
-    }
+    // 面试已完成
+    await finishInterview()
   }
 }
 
-// 结束面试
-async function finishInterview() {
-  stopTimers()
-  paused.value = false
+// 保留旧函数名以兼容现有代码，但实际调用新的处理逻辑
+async function pushAnswerAndNext(answerText) {
+  await handleSubmitAnswer(answerText)
+}
 
+// 结束面试 - 完全照抄 EchoMind-feature- 前端实现
+// 调用 completeInterview 后跳转到面试记录页，评估在后台异步进行
+async function finishInterview() {
+  if (!interviewSession.value.sessionId) return
+
+  isSubmitting.value = true
   try {
-    // 调用评价接口
-    const evaluationResult = await getInterviewEvaluation()
+    // 调用提前交卷接口
+    await interviewApi.completeInterview(interviewSession.value.sessionId)
+    showCompleteConfirm.value = false
     
-    // 把记录写入"历史记录"
-    try {
-      addRecord({
-        type: cfg.type,
-        title: `${labelType(cfg.type)} · ${labelDifficulty(cfg.difficulty)} 面试`,
-        overall: evaluationResult.overall,
-        dimensions: evaluationResult.dimensions.map(d => ({ k: d.name, v: d.score })),
-        transcript: transcript.value.slice(),
-        startedAt: Date.now() - 60 * 1000,
-        endedAt: Date.now(),
-        notes: evaluationResult.summary,
-      })
-    } catch {}
-    
-    // 跳转到报告页
-    router.push('/app/interview?stage=report&result=' + encodeURIComponent(JSON.stringify(evaluationResult)))
-  } catch (error) {
-    console.error('获取评价失败:', error)
-    // 降级到本地模拟评分
-    const mockReport = generateMockReport()
-    
-    // 把记录写入"历史记录"
-    try {
-      addRecord({
-        type: cfg.type,
-        title: `${labelType(cfg.type)} · ${labelDifficulty(cfg.difficulty)} 面试`,
-        overall: mockReport.overall,
-        dimensions: mockReport.dimLabels.map((k, i) => ({ k, v: mockReport.dimData[i] })),
-        transcript: transcript.value.slice(),
-        startedAt: Date.now() - 60 * 1000,
-        endedAt: Date.now(),
-        notes: mockReport.summary,
-      })
-    } catch {}
-    
-    // 跳转到报告页
-    router.push('/app/interview?stage=report&result=' + encodeURIComponent(JSON.stringify(mockReport)))
+    // 面试已完成，评估将在后台进行，跳转到面试记录页
+    onInterviewComplete()
+  } catch (err) {
+    subtitle.value = '提前交卷失败，请重试'
+    console.error('[finishInterview] 提前交卷失败:', err)
+  } finally {
+    isSubmitting.value = false
   }
+}
+
+// 面试完成回调 - 跳转到面试记录页（与 EchoMind-feature- 完全一致）
+function onInterviewComplete() {
+  // 面试已完成，评估将在后台进行，跳转到面试记录页
+  // 清除当前面试会话数据
+  localStorage.removeItem('interviewConfig')
+  
+  // 跳转到面试记录列表页
+  router.push('/app/records')
 }
 
 // 初始化
@@ -782,6 +875,17 @@ onMounted(async () => {
   
   // 初始化面试
   await initInterview()
+  
+  // 添加按钮鼠标跟随效果
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
 })
 
 // 清理
@@ -849,13 +953,74 @@ onBeforeUnmount(() => {
   border-color: var(--stroke2);
 }
 
+/* 问题进度面板 - 完全按照 EchoMind-feature- 样式 */
+.question-progress-panel {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.progress-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.progress-percent {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: var(--bg1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* 问题分类标签 - 完全按照 EchoMind-feature- 样式 */
+.question-category-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 20px;
+  margin-left: 8px;
+}
+
 /* 中间Live2D区域 */
 .avatar-section {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-top: 60px;
+  padding-top: 80px;
   padding-bottom: 20px;
   position: relative;
   z-index: 1;
@@ -881,24 +1046,144 @@ onBeforeUnmount(() => {
   border-radius: 20px;
 }
 
-/* 聊天区域 */
+/* 聊天区域 - QQ/微信风格：单列表 */
 .chat-area {
   flex: 1;
   padding: 0 20px;
   overflow: hidden;
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  border-radius: 16px 16px 0 0;
+  margin: 0 20px;
 }
 
 .chat-messages {
-  height: 100%;
+  flex: 1;
   overflow-y: auto;
-  padding: 10px 0;
+  padding: 16px;
   display: flex;
   flex-direction: column;
+  scroll-behavior: smooth;
+}
+
+.messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: auto;
+}
+
+/* 滚动锚点 */
+.scroll-anchor {
+  height: 1px;
+  flex-shrink: 0;
+}
+
+/* 隐藏滚动条但保留功能 */
+.chat-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 2px;
+}
+
+/* 消息行 - QQ/微信风格 */
+.message-row {
+  display: flex;
+  width: 100%;
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+.message-row.interviewer {
+  justify-content: flex-start;
+}
+
+.message-row.candidate {
+  justify-content: flex-end;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 消息气泡 */
+.message-bubble {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+/* 面试官消息 - 白色气泡，左对齐 */
+.message-bubble.interviewer {
+  background: white;
+  color: #333;
+  border: 1px solid #e0e0e0;
+  border-top-left-radius: 4px;
+}
+
+/* 用户消息 - 绿色气泡，右对齐 */
+.message-bubble.candidate {
+  background: #95ec69;
+  color: #333;
+  border: none;
+  border-top-right-radius: 4px;
+}
+
+.message-sender {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.message-bubble.candidate .message-sender {
+  text-align: right;
+  color: #5a9c3a;
+}
+
+.message-text {
+  white-space: pre-wrap;
+}
+
+/* 占位符样式 */
+.chat-placeholder {
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  padding: 60px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 12px;
 }
 
+.placeholder-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+/* 兼容旧代码的消息行样式 */
 .message-row {
   display: flex;
   width: 100%;
@@ -910,28 +1195,6 @@ onBeforeUnmount(() => {
 
 .message-row.right {
   justify-content: flex-end;
-}
-
-.message-bubble {
-  max-width: 75%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 14px;
-  line-height: 1.5;
-  word-wrap: break-word;
-}
-
-.message-bubble.interviewer {
-  background: var(--panel);
-  border: 1px solid var(--stroke);
-  color: var(--text);
-  border-bottom-left-radius: 4px;
-}
-
-.message-bubble.candidate {
-  background: var(--brand);
-  color: white;
-  border-bottom-right-radius: 4px;
 }
 
 /* 底部输入区域 */

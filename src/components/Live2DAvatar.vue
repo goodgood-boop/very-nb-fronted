@@ -15,7 +15,8 @@ import { pinyin } from 'pinyin-pro'
  */
 
 const MODEL_JSON_PATH = '/models/kei/kei_vowels_pro/runtime/kei_vowels_pro.model3.json'
-const API_BASE = 'http://127.0.0.1:8000'
+// 后端已配置 CORS，直接使用完整 URL
+const API_BASE = 'http://113.54.240.73:8080'
 
 const emit = defineEmits(['subtitle', 'speaking'])
 const wrap = ref(null)

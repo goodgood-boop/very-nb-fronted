@@ -1,5 +1,5 @@
 <template>
-  <div class="auth-page">
+  <div class="auth-page page-with-bg">
     <div class="auth-card" :class="{ 'register-mode': isRegister }">
       <!-- 左侧 -->
       <div class="auth-left">
@@ -45,7 +45,7 @@
               <a href="#" class="link">忘记密码？</a>
             </div>
             
-            <button class="btn-primary" @click="onLogin">登 录</button>
+            <button class="btn-primary btn-glow" @click="onLogin">登 录</button>
             
             <div v-if="loginError" class="error-message">{{ loginError }}</div>
           </div>
@@ -56,7 +56,7 @@
           <div class="switch-content">
             <h3>已有账号？</h3>
             <p>欢迎回来！立即登录开始你的面试准备</p>
-            <button class="btn-secondary" @click="toggleAuth">
+            <button class="btn-secondary btn-glow" @click="toggleAuth">
               去登录
             </button>
           </div>
@@ -70,7 +70,7 @@
           <div class="switch-content">
             <h3>新用户？</h3>
             <p>加入我们，开启AI智能面试新体验</p>
-            <button class="btn-secondary" @click="toggleAuth">
+            <button class="btn-secondary btn-glow" @click="toggleAuth">
               去注册
             </button>
           </div>
@@ -130,7 +130,7 @@
               />
             </div>
             
-            <button class="btn-primary" @click="onRegister">注 册</button>
+            <button class="btn-primary btn-glow" @click="onRegister">注 册</button>
             
             <div v-if="registerError" class="error-message">{{ registerError }}</div>
           </div>
@@ -161,6 +161,17 @@ const isRegister = ref(false)
 // 根据路由自动切换模式
 onMounted(() => {
   isRegister.value = route.path === '/register'
+  
+  // 添加按钮鼠标跟随效果
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
 })
 
 const loginForm = ref({

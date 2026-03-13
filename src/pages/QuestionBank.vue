@@ -1,21 +1,21 @@
 <template>
-  <div>
+  <div class="page-with-bg">
     <Topbar
       title="题库练习"
       subtitle="按方向浏览题目（UI 示例）。可扩展为收藏/错题本/练习计时。"
     />
 
-    <div class="container">
+    <div class="container page-content">
       <div class="grid2">
         <div class="card" style="padding:12px 14px;">
           <div style="font-weight:950;">方向</div>
           <div class="muted2" style="font-size:12px; margin-top:4px;">选择一个方向查看题目</div>
 
           <div class="row gap10 wrap" style="margin-top:12px;">
-            <button class="btn" :class="{ primary: type==='frontend' }" @click="type='frontend'">前端</button>
-            <button class="btn" :class="{ primary: type==='backend' }" @click="type='backend'">后端</button>
-            <button class="btn" :class="{ primary: type==='algo' }" @click="type='algo'">算法</button>
-            <button class="btn" :class="{ primary: type==='pm' }" @click="type='pm'">产品</button>
+            <button class="btn btn-glow" :class="{ primary: type==='frontend' }" @click="type='frontend'">前端</button>
+            <button class="btn btn-glow" :class="{ primary: type==='backend' }" @click="type='backend'">后端</button>
+            <button class="btn btn-glow" :class="{ primary: type==='algo' }" @click="type='algo'">算法</button>
+            <button class="btn btn-glow" :class="{ primary: type==='pm' }" @click="type='pm'">产品</button>
           </div>
 
           <div class="card soft" style="margin-top:14px; padding:12px 14px;">
@@ -34,8 +34,8 @@
             <div style="font-weight:950;">{{ current || '请选择一题开始练习' }}</div>
             <textarea class="textarea" style="margin-top:10px;" rows="6" v-model="draft" placeholder="写下你的回答要点…" />
             <div class="row gap10 wrap" style="margin-top:10px;">
-              <button class="btn primary" @click="markDone" :disabled="!current">标记已练</button>
-              <button class="btn" @click="draft=''" :disabled="!draft">清空</button>
+              <button class="btn primary btn-glow" @click="markDone" :disabled="!current">标记已练</button>
+              <button class="btn btn-glow" @click="draft=''" :disabled="!draft">清空</button>
             </div>
             <div class="muted2" style="margin-top:10px;" v-if="doneCount>0">
               已练题目数：<span class="mono">{{ doneCount }}</span>
@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import Topbar from '../components/ui/Topbar.vue'
 import { QUESTION_BANK } from '../lib/mockQuestions'
 import { lsGet, lsSet } from '../lib/storage'
@@ -96,4 +96,16 @@ function markDone(){
   doneSet.value.add(current.value)
   lsSet(KEY_DONE, Array.from(doneSet.value))
 }
+
+onMounted(() => {
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
+})
 </script>

@@ -5,15 +5,18 @@ import Auth from '../pages/Auth.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
 import WindmillHome from '../pages/WindmillHome.vue'
-import Dashboard from '../pages/Dashboard.vue'
-import Interview from '../pages/Interview.vue'
 import InterviewRoom from '../pages/InterviewRoom.vue'
-import Records from '../pages/Records.vue'
+import InterviewHistory from '../pages/InterviewHistory.vue'
+import InterviewDetail from '../pages/InterviewDetail.vue'
+import ResumeUpload from '../pages/ResumeUpload.vue'
+import ResumeAnalysis from '../pages/ResumeAnalysis.vue'
 import Analytics from '../pages/Analytics.vue'
 import QuestionBank from '../pages/QuestionBank.vue'
 import Checkin from '../pages/Checkin.vue'
 import Profile from '../pages/Profile.vue'
 import Settings from '../pages/Settings.vue'
+import KnowledgeBase from '../pages/KnowledgeBase.vue'
+import KnowledgeBaseChat from '../pages/KnowledgeBaseChat.vue'
 import NotFound from '../pages/NotFound.vue'
 
 const router = createRouter({
@@ -30,14 +33,17 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/app/home' },
         { path: 'home', component: WindmillHome, meta: { title: '主页' } },
-        { path: 'dashboard', component: Dashboard, meta: { title: '工作台' } },
-        { path: 'interview', component: Interview, meta: { title: '开始面试' } },
-        { path: 'records', component: Records, meta: { title: '面试记录' } },
+        { path: 'interview', component: ResumeUpload, meta: { title: '上传简历' } },
+        { path: 'resume-analysis/:resumeId', component: ResumeAnalysis, meta: { title: '简历分析' } },
+        { path: 'records', component: InterviewHistory, meta: { title: '面试记录' } },
+        { path: 'interview-detail/:sessionId', component: InterviewDetail, meta: { title: '面试详情' } },
         { path: 'analytics', component: Analytics, meta: { title: '面试统计' } },
         { path: 'bank', component: QuestionBank, meta: { title: '题库练习' } },
         { path: 'checkin', component: Checkin, meta: { title: '打卡中心' } },
         { path: 'profile', component: Profile, meta: { title: '个人中心' } },
         { path: 'settings', component: Settings, meta: { title: '设置' } },
+        { path: 'knowledge', component: KnowledgeBase, meta: { title: '知识库' } },
+        { path: 'knowledge-chat', component: KnowledgeBaseChat, meta: { title: '知识问答' } },
       ],
     },
 

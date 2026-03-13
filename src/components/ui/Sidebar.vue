@@ -73,6 +73,16 @@
         <span class="nav-text">打卡中心</span>
       </RouterLink>
 
+      <div class="nav-sec" style="margin-top:10px;">知识库</div>
+      <RouterLink :title="collapsed ? '知识库' : ''" to="/app/knowledge" :class="{ active: isActive('/app/knowledge') }" ref="navLinks">
+        <Database :size="18" />
+        <span class="nav-text">知识库</span>
+      </RouterLink>
+      <RouterLink :title="collapsed ? '知识问答' : ''" to="/app/knowledge-chat" :class="{ active: isActive('/app/knowledge-chat') }" ref="navLinks">
+        <MessageSquare :size="18" />
+        <span class="nav-text">知识问答</span>
+      </RouterLink>
+
       <div class="nav-sec" style="margin-top:10px;">账户</div>
       <RouterLink :title="collapsed ? '个人中心' : ''" to="/app/profile" :class="{ active: isActive('/app/profile') }" ref="navLinks">
         <User :size="18" />
@@ -112,7 +122,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { LayoutDashboard, Mic, History, ChartLine, BookOpen, User, Settings, Calendar, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { LayoutDashboard, Mic, History, ChartLine, BookOpen, User, Settings, Calendar, ChevronLeft, ChevronRight, Database, MessageSquare } from 'lucide-vue-next'
 import LogoMark from './LogoMark.vue'
 import AvatarChip from './AvatarChip.vue'
 import { currentUser, logout } from '../../lib/auth'

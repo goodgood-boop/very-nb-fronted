@@ -1,11 +1,11 @@
 <template>
-  <div>
+  <div class="page-with-bg">
     <Topbar
       title="个人中心"
       subtitle="修改用户名 / 密码 / 头像；退出登录；注销账号（UI-only，本地存储）。"
     />
 
-    <div class="container">
+    <div class="container page-content">
       <div class="grid2">
         <div class="card" style="overflow:hidden;">
           <div style="padding:12px 14px; border-bottom:1px solid var(--stroke);">
@@ -25,8 +25,8 @@
               <div style="flex:1;">
                 <div class="muted2" style="font-size:12px;">头像</div>
                 <div class="row gap10 wrap" style="margin-top:8px;">
-                  <button class="btn" @click="setGradientAvatar">使用渐变头像</button>
-                  <label class="btn ghost">
+                  <button class="btn btn-glow" @click="setGradientAvatar">使用渐变头像</button>
+                  <label class="btn ghost btn-glow">
                     上传图片
                     <input type="file" accept="image/*" style="display:none" @change="onPickFile" />
                   </label>
@@ -39,7 +39,7 @@
               <div class="muted2" style="font-size:12px; margin-bottom:6px;">用户名</div>
               <input class="input" v-model.trim="username" placeholder="输入新的用户名" />
               <div class="row gap10" style="margin-top:10px;">
-                <button class="btn primary" @click="saveProfile">保存资料</button>
+                <button class="btn primary btn-glow" @click="saveProfile">保存资料</button>
               </div>
               <div v-if="okMsg" style="color:var(--ok); font-size:12px; margin-top:10px;">{{ okMsg }}</div>
               <div v-if="errMsg" style="color:var(--bad); font-size:12px; margin-top:10px;">{{ errMsg }}</div>
@@ -77,7 +77,7 @@
                 头像框：{{ cosmetics?.frame?.name || '未装备' }}；勋章：{{ cosmetics?.badge?.name || '未装备' }}。
               </div>
               <div class="row gap10 wrap" style="margin-top:10px;">
-                <RouterLink class="btn primary" to="/app/checkin">去打卡中心管理</RouterLink>
+                <RouterLink class="btn primary btn-glow" to="/app/checkin">去打卡中心管理</RouterLink>
               </div>
             </div>
           </div>
@@ -97,8 +97,8 @@
             <input class="input" type="password" v-model="newPwd" />
 
             <div class="row gap10 wrap" style="margin-top:10px;">
-              <button class="btn" @click="onChangePassword">修改密码</button>
-              <button class="btn danger" @click="onLogout">退出登录</button>
+              <button class="btn btn-glow" @click="onChangePassword">修改密码</button>
+              <button class="btn danger btn-glow" @click="onLogout">退出登录</button>
             </div>
 
             <div class="hr" style="margin:14px 0;"></div>
@@ -111,7 +111,7 @@
               <div class="muted2" style="font-size:12px; margin:10px 0 6px;">输入密码确认</div>
               <input class="input" type="password" v-model="delPwd" />
               <div class="row gap10" style="margin-top:10px;">
-                <button class="btn danger" @click="onDelete">确认注销</button>
+                <button class="btn danger btn-glow" @click="onDelete">确认注销</button>
               </div>
 
               <div v-if="okMsg2" style="color:var(--ok); font-size:12px; margin-top:10px;">{{ okMsg2 }}</div>
@@ -173,6 +173,16 @@ function onCheckinUpdated(ev){
 onMounted(() => {
   refreshCheckin()
   window.addEventListener('ai-checkin-updated', onCheckinUpdated)
+  
+  document.querySelectorAll('.btn-glow').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const rect = btn.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      btn.style.setProperty('--mouse-x', `${x}px`)
+      btn.style.setProperty('--mouse-y', `${y}px`)
+    })
+  })
 })
 
 onBeforeUnmount(() => {

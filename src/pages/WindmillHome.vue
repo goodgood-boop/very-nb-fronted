@@ -399,6 +399,8 @@ import {
   Calendar, 
   User, 
   Settings,
+  Database,
+  MessageSquare,
   Move,
   X,
   Sun,
@@ -541,13 +543,15 @@ const items = [
   { label: '面试统计', path: '/app/analytics', icon: ChartLine },
   { label: '题库练习', path: '/app/bank', icon: BookOpen },
   { label: '打卡中心', path: '/app/checkin', icon: Calendar },
+  { label: '知识库', path: '/app/knowledge', icon: Database },
+  { label: '知识问答', path: '/app/knowledge-chat', icon: MessageSquare },
   { label: '个人中心', path: '/app/profile', icon: User },
   { label: '设置', path: '/app/settings', icon: Settings },
 ]
 
 // Create a full 12-blade structure (360 / 30 = 12 items needed)
-// We have 8 real items, so we need 4 blank ones to complete the wheel.
-const fullItems = [...items, ...Array(4).fill({ label: '', path: '', icon: null, isBlank: true })]
+// We have 10 real items, so we need 2 blank ones to complete the wheel.
+const fullItems = [...items, ...Array(2).fill({ label: '', path: '', icon: null, isBlank: true })]
 const totalBlades = 12
 
 const cloudSpeedMultiplier = computed(() => {
