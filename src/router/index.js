@@ -7,7 +7,6 @@ import AppLayout from '../layouts/AppLayout.vue'
 import WindmillHome from '../pages/WindmillHome.vue'
 import InterviewRoom from '../pages/InterviewRoom.vue'
 import InterviewHistory from '../pages/InterviewHistory.vue'
-import InterviewDetail from '../pages/InterviewDetail.vue'
 import ResumeUpload from '../pages/ResumeUpload.vue'
 import ResumeAnalysis from '../pages/ResumeAnalysis.vue'
 import Analytics from '../pages/Analytics.vue'
@@ -36,7 +35,6 @@ const router = createRouter({
         { path: 'interview', component: ResumeUpload, meta: { title: '上传简历' } },
         { path: 'resume-analysis/:resumeId', component: ResumeAnalysis, meta: { title: '简历分析' } },
         { path: 'records', component: InterviewHistory, meta: { title: '面试记录' } },
-        { path: 'interview-detail/:sessionId', component: InterviewDetail, meta: { title: '面试详情' } },
         { path: 'analytics', component: Analytics, meta: { title: '面试统计' } },
         { path: 'bank', component: QuestionBank, meta: { title: '题库练习' } },
         { path: 'checkin', component: Checkin, meta: { title: '打卡中心' } },
