@@ -113,12 +113,44 @@ export const interviewApi = {
 
   /**
    * 获取面试详情
-   * GET /api/interview/sessions/{sessionId}/detail
+   * GET /api/interview/sessions/{sessionId}/details
    * @param {string} sessionId
    * @returns {Promise<InterviewDetail>}
    */
   async getInterviewDetail(sessionId) {
-    return request.get(`/api/interview/sessions/${sessionId}/detail`)
+    return request.get(`/api/interview/sessions/${sessionId}/details`)
+  },
+
+  /**
+   * 提前结束面试（交卷）
+   * POST /api/interview/sessions/{sessionId}/complete
+   * @param {string} sessionId
+   * @returns {Promise<void>}
+   */
+  async completeInterview(sessionId) {
+    return request.post(`/api/interview/sessions/${sessionId}/complete`)
+  },
+
+  /**
+   * 删除面试会话
+   * DELETE /api/interview/sessions/{sessionId}
+   * @param {string} sessionId
+   * @returns {Promise<void>}
+   */
+  async deleteSession(sessionId) {
+    return request.delete(`/api/interview/sessions/${sessionId}`)
+  },
+
+  /**
+   * 导出面试报告PDF
+   * GET /api/interview/sessions/{sessionId}/export
+   * @param {string} sessionId
+   * @returns {Promise<Blob>}
+   */
+  async exportReport(sessionId) {
+    return request.get(`/api/interview/sessions/${sessionId}/export`, {
+      responseType: 'blob'
+    })
   }
 }
 

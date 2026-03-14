@@ -10,6 +10,14 @@ import { request, getErrorMessage } from './request.js'
  */
 export const resumeApi = {
   /**
+   * 获取所有简历列表
+   * @returns {Promise<Array<{id: number, filename: string, fileSize: number, contentType: string, uploadedAt: string, accessCount: number, analyzeStatus: string}>>}
+   */
+  async getResumes() {
+    return request.get('/api/resumes')
+  },
+
+  /**
    * 上传简历并获取分析结果
    * @param {File} file - 简历文件
    * @returns {Promise<UploadResponse>}
@@ -51,6 +59,25 @@ export const resumeApi = {
       throw new Error(`导出失败: ${response.status}`)
     }
     return response.blob()
+  },
+
+  /**
+   * 获取简历统计信息
+   * GET /api/resumes/statistics
+   * @returns {Promise<{totalCount: number, totalInterviewCount: number, totalAccessCount: number}>}
+   */
+  async getStatistics() {
+    return request.get('/api/resumes/statistics')
+  },
+
+  /**
+   * 删除简历
+   * DELETE /api/resumes/{id}
+   * @param {number} id - 简历ID
+   * @returns {Promise<void>}
+   */
+  async deleteResume(id) {
+    return request.delete(`/api/resumes/${id}`)
   },
 
   /**

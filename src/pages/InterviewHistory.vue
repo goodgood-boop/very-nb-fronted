@@ -292,28 +292,6 @@
                     </div>
                   </div>
 
-                  <!-- 维度评分 -->
-                  <div v-if="currentInterview.dimensionScores && currentInterview.dimensionScores.length > 0" class="detail-dimensions-card">
-                    <h4>维度评分</h4>
-                    <div class="detail-dimensions-list">
-                      <div 
-                        v-for="(dim, idx) in currentInterview.dimensionScores" 
-                        :key="idx"
-                        class="detail-dimension-item"
-                      >
-                        <div class="detail-dimension-header">
-                          <span class="detail-dimension-name">{{ dim.name }}</span>
-                          <span class="detail-dimension-score">{{ dim.score }}分</span>
-                        </div>
-                        <div class="detail-dimension-bar">
-                          <div 
-                            class="detail-dimension-fill"
-                            :style="{ width: dim.score + '%', backgroundColor: getScoreColor(dim.score) }"
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <!-- 优势和改进建议 -->
@@ -445,6 +423,7 @@ import {
 import { MotionDiv } from '../components/motion'
 import VirtualList from '../components/VirtualList.vue'
 import { interviewApi } from '../api/interview'
+import { resumeApi } from '../api/resume'
 import StatusBadge from '../components/StatusBadge.vue'
 import ScoreDisplay from '../components/ScoreDisplay.vue'
 
@@ -552,12 +531,41 @@ function isEvaluateFailed(interview) {
   return interview.evaluateStatus === 'FAILED'
 }
 
-// 加载数据
+// 加载数据 - 从简历详情中获取面试记录
 const loadData = async () => {
   try {
     loading.value = true
-    const data = await interviewApi.getInterviewHistory()
-    interviews.value = data || []
+    
+    // 1. 获取所有简历列表
+    const resumes = await resumeApi.getResumes()
+    const allInterviews = []
+    
+    // 2. 对每个简历获取详情，提取面试记录
+    for (const resume of resumes) {
+      try {
+        const detail = await resumeApi.getResumeDetail(resume.id)
+        if (detail.interviews && detail.interviews.length > 0) {
+          detail.interviews.forEach(interview => {
+            allInterviews.push({
+              ...interview,
+              resumeId: resume.id,
+              resumeFilename: resume.filename
+            })
+          })
+        }
+      } catch (e) {
+        console.warn(`获取简历 ${resume.id} 详情失败`, e)
+      }
+    }
+    
+    // 3. 按创建时间倒序排序
+    allInterviews.sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.startTime || 0).getTime()
+      const timeB = new Date(b.createdAt || b.startTime || 0).getTime()
+      return timeB - timeA
+    })
+    
+    interviews.value = allInterviews
   } catch (err) {
     console.error('加载面试历史失败', err)
   } finally {

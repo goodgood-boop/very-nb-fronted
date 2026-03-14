@@ -48,10 +48,10 @@ async function getResumeDetail(id) {
 
 /**
  * 获取面试详情
- * GET /api/interview/sessions/{sessionId}/detail
+ * GET /api/interview/sessions/{sessionId}/details
  */
 async function getInterviewDetail(sessionId) {
-  const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}/detail`)
+  const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}/details`)
   return handleResponse(response)
 }
 

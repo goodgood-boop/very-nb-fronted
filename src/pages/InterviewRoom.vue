@@ -179,6 +179,34 @@
         </div>
       </div>
     </Modal>
+
+    <!-- 未完成面试提示对话框 -->
+    <Modal
+      :open="showUnfinishedDialog"
+      title="发现未完成的面试"
+      :subtitle="unfinishedSession ? `您有一个进行中的面试（题目 ${unfinishedSession.currentQuestionIndex + 1}/${unfinishedSession.questions.length}），是否继续？` : ''"
+      @close="handleStartNew"
+    >
+      <div class="card soft" style="padding:20px;">
+        <p style="margin-bottom: 16px; color: #64748b;">
+          您可以选择继续之前的面试进度，或者开始一场新的面试。
+        </p>
+        <div class="row gap10" style="justify-content: flex-end;">
+          <button 
+            class="btn ghost" 
+            @click="handleStartNew"
+          >
+            开始新面试
+          </button>
+          <button 
+            class="btn primary" 
+            @click="handleContinueUnfinished"
+          >
+            继续面试
+          </button>
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -234,7 +262,6 @@ const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
 
 // 面试配置 - 优先使用 URL 参数，其次是 localStorage，最后是默认值
 const cfg = reactive({
-  difficulty: routeQuery.difficulty || savedConfig.difficulty || 'normal',     // easy | normal | hard
   type: routeQuery.type || savedConfig.type || 'frontend',               // frontend | backend | algo | pm
   voice: routeQuery.voice || savedConfig.voice || 'alex',
   rate: routeQuery.rate ? parseFloat(routeQuery.rate) : (savedConfig.rate || 1.0),
@@ -254,17 +281,6 @@ const ttsRateNum = ref(1.0)
 watch(ttsRateNum, (v) => {
   cfg.rate = Number(v || 1.0)
 })
-
-// 根据难度给一个"建议回答时长"（UI 展示用）
-const answerLimit = computed(() => {
-  if (cfg.difficulty === 'easy') return 60
-  if (cfg.difficulty === 'hard') return 120
-  return 90
-})
-
-function labelDifficulty(d){
-  return d === 'easy' ? '简单' : d === 'hard' ? '高压' : '标准'
-}
 
 // 运行时状态
 const subtitle = ref('')
@@ -330,6 +346,11 @@ watch(openSettings, (v) => {
 // 提前交卷确认对话框
 const showCompleteConfirm = ref(false)
 const isSubmitting = ref(false)
+
+// 未完成面试相关
+const showUnfinishedDialog = ref(false)
+const unfinishedSession = ref(null)
+const forceCreateNew = ref(false)
 
 // 聊天滚动区域
 const chatMessagesRef = ref(null)
@@ -408,12 +429,8 @@ async function getInterviewEvaluation() {
 
 // 降级到本地模拟评分
 function generateMockReport() {
-  // 评分是 Demo：按难度稍微调整基准分，让"高压模式更难拿高分"
-  const base = cfg.difficulty === 'hard'
-    ? 64 + Math.round(Math.random() * 16)
-    : cfg.difficulty === 'easy'
-      ? 74 + Math.round(Math.random() * 16)
-      : 68 + Math.round(Math.random() * 16)
+  // 评分是 Demo：固定基准分
+  const base = 70 + Math.round(Math.random() * 16)
 
   const dims = [
     { k: '沟通表达', v: clamp(base + rand(-6, 8)) },
@@ -583,53 +600,165 @@ function getDefaultFollowupQuestion() {
   return followups[Math.floor(Math.random() * followups.length)]
 }
 
-// 初始化面试 - 完全照抄 EchoMind-feature-
-async function initInterview() {
+// 检查是否有未完成的面试 - 完全照抄 EchoMind-feature-
+async function checkUnfinishedSession() {
+  if (!cfg.resumeId) return
+  
+  try {
+    const foundSession = await interviewApi.findUnfinishedSession(cfg.resumeId)
+    if (foundSession && !forceCreateNew.value) {
+      unfinishedSession.value = foundSession
+      showUnfinishedDialog.value = true
+    }
+  } catch (err) {
+    console.error('检查未完成面试失败', err)
+  }
+}
+
+// 继续未完成的面试 - 完全照抄 EchoMind-feature-
+function handleContinueUnfinished() {
+  if (!unfinishedSession.value) return
+  
+  forceCreateNew.value = false
+  restoreSession(unfinishedSession.value)
+  unfinishedSession.value = null
+  showUnfinishedDialog.value = false
+}
+
+// 开始新面试（放弃未完成的）- 完全照抄 EchoMind-feature-
+async function handleStartNew() {
+  unfinishedSession.value = null
+  showUnfinishedDialog.value = false
+  forceCreateNew.value = true
+  
+  // 清除localStorage中的旧会话
+  localStorage.removeItem('interviewConfig')
+  
+  // 创建新会话
+  await createNewSession()
+}
+
+// 恢复会话 - 完全照抄 EchoMind-feature-
+function restoreSession(sessionToRestore) {
+  interviewSession.value = {
+    sessionId: sessionToRestore.sessionId,
+    jobId: sessionToRestore.jobId,
+    questions: sessionToRestore.questions,
+    currentQuestionIndex: sessionToRestore.currentQuestionIndex || 0,
+    currentFollowupIndex: 0
+  }
+  
+  // 恢复当前问题
+  const currentQ = sessionToRestore.questions[sessionToRestore.currentQuestionIndex]
+  if (currentQ) {
+    currentQuestionObj.value = {
+      questionIndex: currentQ.questionIndex || sessionToRestore.currentQuestionIndex,
+      question: currentQ.question || '',
+      type: currentQ.type || '',
+      category: currentQ.category || '',
+      addQuestionIndex: currentQ.addQuestionIndex || 0
+    }
+    
+    // 恢复消息历史
+    transcript.value = []
+    for (let i = 0; i <= sessionToRestore.currentQuestionIndex; i++) {
+      const q = sessionToRestore.questions[i]
+      if (q) {
+        transcript.value.push({
+          id: `${Date.now()}-${i}-q`,
+          role: 'interviewer',
+          text: q.question,
+          category: q.category
+        })
+        if (q.userAnswer) {
+          transcript.value.push({
+            id: `${Date.now()}-${i}-a`,
+            role: 'candidate',
+            text: q.userAnswer
+          })
+        }
+      }
+    }
+    
+    // 保存到localStorage
+    localStorage.setItem('interviewConfig', JSON.stringify({
+      sessionId: sessionToRestore.sessionId,
+      questions: sessionToRestore.questions,
+      currentQuestionIndex: sessionToRestore.currentQuestionIndex,
+      ...cfg
+    }))
+  }
+  
+  paused.value = false
+  
+  // 继续面试，问当前问题
+  ask(currentQuestionObj.value.question)
+}
+
+// 创建新会话
+async function createNewSession() {
   transcript.value = []
   draft.value = ''
   listening.value = false
   subtitle.value = ''
   speaking.value = false
-
-  // 从localStorage读取sessionId和问题列表，避免重复创建会话
-  const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
-  if (savedConfig.sessionId && savedConfig.questions) {
-    interviewSession.value.sessionId = savedConfig.sessionId
-    interviewSession.value.questions = savedConfig.questions
-    interviewSession.value.currentQuestionIndex = savedConfig.currentQuestionIndex || 0
-    
-    // 初始化 currentQuestionObj 为第一题
-    const firstQuestion = savedConfig.questions[0]
-    if (firstQuestion) {
-      currentQuestionObj.value = {
-        questionIndex: firstQuestion.questionIndex || 0,
-        question: firstQuestion.text || firstQuestion.question || '',
-        type: firstQuestion.type || '',
-        category: firstQuestion.category || '',
-        addQuestionIndex: 0
-      }
-    }
-  } else {
-    // 如果没有sessionId或问题列表，才创建新会话
-    const data = await createInterviewSession()
-    
-    // 初始化 currentQuestionObj 为第一题
-    if (data.questions && data.questions.length > 0) {
-      const firstQuestion = data.questions[0]
-      currentQuestionObj.value = {
-        questionIndex: firstQuestion.questionIndex || 0,
-        question: firstQuestion.question || '',
-        type: firstQuestion.type || '',
-        category: firstQuestion.category || '',
-        addQuestionIndex: 0
-      }
+  
+  const data = await createInterviewSession()
+  
+  // 初始化 currentQuestionObj 为第一题
+  if (data.questions && data.questions.length > 0) {
+    const firstQuestion = data.questions[0]
+    currentQuestionObj.value = {
+      questionIndex: firstQuestion.questionIndex || 0,
+      question: firstQuestion.question || '',
+      type: firstQuestion.type || '',
+      category: firstQuestion.category || '',
+      addQuestionIndex: 0
     }
   }
   
   paused.value = false
-
+  
   // 先问第一题
   await ask(currentQuestion.value)
+}
+
+// 初始化面试 - 完全照抄 EchoMind-feature-
+async function initInterview() {
+  // 首先检查是否有未完成的面试
+  if (!forceCreateNew.value) {
+    await checkUnfinishedSession()
+    if (unfinishedSession.value) {
+      // 有未完成面试，显示对话框让用户选择
+      return
+    }
+  }
+  
+  // 从localStorage读取sessionId和问题列表
+  const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
+  if (savedConfig.sessionId && savedConfig.questions && !forceCreateNew.value) {
+    interviewSession.value.sessionId = savedConfig.sessionId
+    interviewSession.value.questions = savedConfig.questions
+    interviewSession.value.currentQuestionIndex = savedConfig.currentQuestionIndex || 0
+    
+    // 初始化 currentQuestionObj 为当前题
+    const currentQ = savedConfig.questions[savedConfig.currentQuestionIndex || 0]
+    if (currentQ) {
+      currentQuestionObj.value = {
+        questionIndex: currentQ.questionIndex || savedConfig.currentQuestionIndex || 0,
+        question: currentQ.question || currentQ.text || '',
+        type: currentQ.type || '',
+        category: currentQ.category || '',
+        addQuestionIndex: 0
+      }
+    }
+    
+    paused.value = false
+    await ask(currentQuestion.value)
+  } else {
+    // 创建新会话
+    await createNewSession()
+  }
 }
 
 // ask():
@@ -682,8 +811,8 @@ function startAnswer(){
     if (paused.value) return
     answerSec.value += 1
 
-    // 超过建议时长就提示（不强制结束，避免打断演示）
-    if (answerSec.value === answerLimit.value) {
+    // 超过建议时长(90秒)就提示（不强制结束，避免打断演示）
+    if (answerSec.value === 90) {
       // 这里不弹窗，避免打扰；你可以改成 toast。
       subtitle.value = '提示：已达到建议回答时长，可以收尾给结论。'
     }
@@ -703,6 +832,11 @@ function togglePause(){
 function applySettings(){
   openSettings.value = false
   paused.value = false
+  
+  // 如果当前正在思考阶段，立即应用新的思考时间
+  if (phase.value === 'thinking' && thinkLeft.value > cfg.thinkSeconds) {
+    thinkLeft.value = cfg.thinkSeconds
+  }
 }
 
 async function testSpeak(){
@@ -827,8 +961,9 @@ async function handleSubmitAnswer(answerText) {
     // 还有下一题，继续问
     await ask(nextQuestionText)
   } else {
-    // 面试已完成
-    await finishInterview()
+    // 面试已完成（正常结束，所有题目已回答完）
+    // 与 EchoMind-feature- 一致：正常结束不调用 completeInterview，直接跳转
+    onInterviewComplete()
   }
 }
 
@@ -837,7 +972,7 @@ async function pushAnswerAndNext(answerText) {
   await handleSubmitAnswer(answerText)
 }
 
-// 结束面试 - 完全照抄 EchoMind-feature- 前端实现
+// 提前交卷 - 完全照抄 EchoMind-feature- 前端实现
 // 调用 completeInterview 后跳转到面试记录页，评估在后台异步进行
 async function finishInterview() {
   if (!interviewSession.value.sessionId) return

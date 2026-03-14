@@ -12,8 +12,6 @@
         <div class="loading-meta">
           <span class="meta-item">{{ getJobLabel(interviewConfig.jobId) }}</span>
           <span class="meta-dot">·</span>
-          <span class="meta-item">{{ getDifficultyLabel(interviewConfig.difficulty) }}</span>
-          <span class="meta-dot">·</span>
           <span class="meta-item">{{ interviewConfig.questionCount }}题</span>
         </div>
         <div class="loading-progress">
@@ -290,7 +288,12 @@
                     class="suggestion-item"
                   >
                     <span class="category-tag" :class="suggestion.category">{{ suggestion.category }}</span>
-                    <span class="suggestion-text">{{ suggestion.content }}</span>
+                    <div class="suggestion-content">
+                      <div class="suggestion-issue">{{ suggestion.issue }}</div>
+                      <div class="suggestion-recommendation" v-if="suggestion.recommendation">
+                        <span class="recommendation-label">建议：</span>{{ suggestion.recommendation }}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -306,7 +309,12 @@
                     class="suggestion-item"
                   >
                     <span class="category-tag" :class="suggestion.category">{{ suggestion.category }}</span>
-                    <span class="suggestion-text">{{ suggestion.content }}</span>
+                    <div class="suggestion-content">
+                      <div class="suggestion-issue">{{ suggestion.issue }}</div>
+                      <div class="suggestion-recommendation" v-if="suggestion.recommendation">
+                        <span class="recommendation-label">建议：</span>{{ suggestion.recommendation }}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -322,7 +330,12 @@
                     class="suggestion-item"
                   >
                     <span class="category-tag" :class="suggestion.category">{{ suggestion.category }}</span>
-                    <span class="suggestion-text">{{ suggestion.content }}</span>
+                    <div class="suggestion-content">
+                      <div class="suggestion-issue">{{ suggestion.issue }}</div>
+                      <div class="suggestion-recommendation" v-if="suggestion.recommendation">
+                        <span class="recommendation-label">建议：</span>{{ suggestion.recommendation }}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -384,37 +397,6 @@
           </div>
 
           <div class="modal-body">
-            <!-- 面试难度 -->
-            <div class="setting-item">
-              <label class="setting-label">面试难度</label>
-              <div class="setting-options">
-                <button 
-                  class="option-btn"
-                  :class="{ active: interviewConfig.difficulty === 'easy' }"
-                  @click="interviewConfig.difficulty = 'easy'"
-                >
-                  简单
-                </button>
-                <button 
-                  class="option-btn"
-                  :class="{ active: interviewConfig.difficulty === 'normal' }"
-                  @click="interviewConfig.difficulty = 'normal'"
-                >
-                  标准
-                </button>
-                <button 
-                  class="option-btn"
-                  :class="{ active: interviewConfig.difficulty === 'hard' }"
-                  @click="interviewConfig.difficulty = 'hard'"
-                >
-                  高压
-                </button>
-              </div>
-              <p class="setting-hint">
-                影响思考时间：简单(30s) / 标准(20s) / 高压(10s)
-              </p>
-            </div>
-
             <!-- 面试职位 -->
             <div class="setting-item">
               <label class="setting-label">面试职位</label>
@@ -451,6 +433,195 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 面试详情弹窗 -->
+    <Teleport to="body">
+      <div v-if="showDetailModal" class="detail-modal-overlay" @click.self="closeDetailModal">
+        <div class="detail-modal-content">
+          <!-- 加载状态 -->
+          <div v-if="detailLoading" class="detail-loading">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+          </div>
+
+          <!-- 错误状态 -->
+          <div v-else-if="detailError" class="detail-error">
+            <p>{{ detailError }}</p>
+            <button class="btn secondary" @click="closeDetailModal">关闭</button>
+          </div>
+
+          <!-- 详情内容 -->
+          <template v-else-if="currentInterview">
+            <div class="detail-modal-header">
+              <h3>面试详情</h3>
+              <div class="header-actions">
+                <button 
+                  class="btn-icon" 
+                  @click="exportDetailPDF"
+                  :disabled="detailExporting"
+                  title="导出PDF"
+                >
+                  <svg v-if="!detailExporting" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  <span v-else class="spinner-small"></span>
+                </button>
+                <button class="btn-icon" @click="closeDetailModal" title="关闭">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="detail-modal-body">
+              <!-- 评分卡片 -->
+              <div v-if="currentInterview.overallScore !== undefined" class="detail-score-card">
+                <div class="detail-score-circle">
+                  <svg class="detail-score-ring" viewBox="0 0 140 140">
+                    <circle cx="70" cy="70" r="62" fill="none" stroke="#f1f5f9" stroke-width="10"/>
+                    <circle 
+                      cx="70" cy="70" r="62" 
+                      fill="none" 
+                      :stroke="getScoreColor(currentInterview.overallScore)"
+                      stroke-width="10"
+                      stroke-linecap="round"
+                      :stroke-dasharray="2 * Math.PI * 62"
+                      :stroke-dashoffset="2 * Math.PI * 62 - (currentInterview.overallScore / 100) * 2 * Math.PI * 62"
+                      class="score-progress"
+                    />
+                  </svg>
+                  <div class="detail-score-value">
+                    <span class="detail-score-number">{{ currentInterview.overallScore ?? '-' }}</span>
+                    <span class="detail-score-label">总分</span>
+                  </div>
+                </div>
+                <p class="detail-score-feedback">{{ currentInterview.overallFeedback || '表现良好，展示了扎实的技术基础。' }}</p>
+              </div>
+
+              <!-- 基本信息 -->
+              <div class="detail-info-card">
+                <div class="detail-info-row">
+                  <span class="info-label">面试ID</span>
+                  <span class="info-value">#{{ currentInterview.sessionId?.slice(-8) }}</span>
+                </div>
+                <div class="detail-info-row">
+                  <span class="info-label">面试时间</span>
+                  <span class="info-value">{{ formatDateTime(currentInterview.createdAt) }}</span>
+                </div>
+                <div class="detail-info-row">
+                  <span class="info-label">状态</span>
+                  <span class="info-value status-badge" :class="currentInterview.status?.toLowerCase()">
+                    {{ getStatusText(currentInterview.status) }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 表现优势 -->
+              <div v-if="currentInterview.strengths && currentInterview.strengths.length > 0" class="detail-section">
+                <h4 class="section-title success">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22,4 12,14.01 9,11.01"/>
+                  </svg>
+                  表现优势
+                </h4>
+                <ul class="detail-list">
+                  <li v-for="(strength, i) in currentInterview.strengths" :key="i">
+                    <span class="list-dot success"></span>
+                    <span>{{ strength }}</span>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- 改进建议 -->
+              <div v-if="currentInterview.improvements && currentInterview.improvements.length > 0" class="detail-section">
+                <h4 class="section-title warning">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  改进建议
+                </h4>
+                <ul class="detail-list">
+                  <li v-for="(improvement, i) in currentInterview.improvements" :key="i">
+                    <span class="list-dot warning"></span>
+                    <span>{{ improvement }}</span>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- 问答详情 -->
+              <div v-if="currentInterview.answers?.length > 0" class="detail-section">
+                <h4>问答记录详情 ({{ currentInterview.answers.length }}题)</h4>
+                <div class="qa-list">
+                  <div 
+                    v-for="(answer, index) in currentInterview.answers" 
+                    :key="index"
+                    class="qa-item"
+                    :class="{ expanded: expandedQuestions.has(index) }"
+                  >
+                    <div class="qa-header" @click="toggleQuestion(index)">
+                      <div class="qa-title">
+                        <span class="qa-number">{{ answer.questionIndex + 1 }}</span>
+                        <span v-if="answer.category" class="qa-category">{{ answer.category }}</span>
+                        <span class="qa-question">{{ answer.question }}</span>
+                      </div>
+                      <div class="qa-meta">
+                        <span v-if="answer.score !== undefined" class="qa-score" :class="getScoreClass(answer.score)">
+                          得分: {{ answer.score }}
+                        </span>
+                        <svg class="expand-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <div v-if="expandedQuestions.has(index)" class="qa-content">
+                      <div class="qa-answer-section">
+                        <span class="section-label">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z"/>
+                          </svg>
+                          你的回答
+                        </span>
+                        <p class="section-content" :class="{ 'no-answer': !answer.userAnswer || answer.userAnswer === '不知道' }">
+                          "{{ answer.userAnswer || '(未回答)' }}"
+                        </p>
+                      </div>
+                      <div v-if="answer.feedback" class="qa-evaluation-section">
+                        <span class="section-label">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3V21H21"/>
+                            <path d="M18 9L12 15L9 12L3 18"/>
+                          </svg>
+                          AI 深度评价
+                        </span>
+                        <p class="section-content">{{ answer.feedback }}</p>
+                      </div>
+                      <div v-if="answer.referenceAnswer" class="qa-suggestion-section">
+                        <span class="section-label">
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M9 12H15"/>
+                            <path d="M12 9V15"/>
+                          </svg>
+                          参考答案
+                        </span>
+                        <pre class="reference-text">{{ answer.referenceAnswer }}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -458,6 +629,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { resumeApi } from '../api/resume.js'
+import { interviewApi } from '../api/interview.js'
 import RadarChart from '../components/RadarChart.vue'
 import ScoreProgressBar from '../components/ScoreProgressBar.vue'
 
@@ -473,6 +645,14 @@ const exporting = ref(null)
 const reanalyzing = ref(false)
 const showInterviewSettings = ref(false)
 
+// 面试详情弹窗状态
+const showDetailModal = ref(false)
+const detailLoading = ref(false)
+const detailError = ref(null)
+const currentInterview = ref(null)
+const detailExporting = ref(false)
+const expandedQuestions = ref(new Set())
+
 // 面试准备状态
 const preparingInterview = ref(false)
 const loadingText = ref('正在准备面试...')
@@ -482,7 +662,6 @@ let progressTimer = null
 
 // 面试配置
 const interviewConfig = ref({
-  difficulty: 'normal',
   jobId: '0',
   questionCount: 8
 })
@@ -648,7 +827,6 @@ const startInterview = () => {
     const query = {
       resumeId: resumeId.value,
       resumeText: resume.value?.resumeText || '',
-      difficulty: interviewConfig.value.difficulty,
       jobId: interviewConfig.value.jobId,
       questionCount: interviewConfig.value.questionCount
     }
@@ -683,19 +861,64 @@ const getJobLabel = (jobId) => {
   return jobMap[jobId] || '前端开发'
 }
 
-// 获取难度标签
-const getDifficultyLabel = (difficulty) => {
-  const difficultyMap = {
-    'easy': '简单',
-    'normal': '标准',
-    'hard': '高压'
+// 查看面试详情
+const viewInterviewDetail = async (sessionId) => {
+  showDetailModal.value = true
+  detailLoading.value = true
+  detailError.value = null
+  currentInterview.value = null
+  expandedQuestions.value = new Set()
+  
+  try {
+    const detail = await interviewApi.getInterviewDetail(sessionId)
+    currentInterview.value = detail
+  } catch (err) {
+    console.error('加载面试详情失败', err)
+    detailError.value = err.message || '加载失败'
+  } finally {
+    detailLoading.value = false
   }
-  return difficultyMap[difficulty] || '标准'
 }
 
-// 查看面试详情
-const viewInterviewDetail = (sessionId) => {
-  router.push(`/app/interview-detail/${sessionId}`)
+// 关闭详情弹窗
+const closeDetailModal = () => {
+  showDetailModal.value = false
+  currentInterview.value = null
+  detailError.value = null
+  expandedQuestions.value = new Set()
+}
+
+// 切换问题展开/收起
+const toggleQuestion = (index) => {
+  const newSet = new Set(expandedQuestions.value)
+  if (newSet.has(index)) {
+    newSet.delete(index)
+  } else {
+    newSet.add(index)
+  }
+  expandedQuestions.value = newSet
+}
+
+// 从弹窗导出PDF
+const exportDetailPDF = async () => {
+  if (!currentInterview.value) return
+  
+  detailExporting.value = true
+  try {
+    const blob = await interviewApi.exportReport(currentInterview.value.sessionId)
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `面试报告_${currentInterview.value.sessionId.slice(-8)}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    alert('导出失败，请重试')
+  } finally {
+    detailExporting.value = false
+  }
 }
 
 // 返回
@@ -724,6 +947,20 @@ const getStatusText = (status) => {
     'INTERRUPTED': '已中断'
   }
   return statusMap[status] || status
+}
+
+// 获取评分颜色类
+const getScoreClass = (score) => {
+  if (score >= 80) return 'high'
+  if (score >= 60) return 'medium'
+  return 'low'
+}
+
+// 获取评分颜色值
+const getScoreColor = (score) => {
+  if (score >= 80) return '#10b981'
+  if (score >= 60) return '#f59e0b'
+  return '#ef4444'
 }
 
 // 生命周期
@@ -1423,6 +1660,35 @@ onUnmounted(() => {
   color: #ea580c;
 }
 
+.suggestion-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion-issue {
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.suggestion-recommendation {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.recommendation-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
 .suggestion-text {
   font-size: 14px;
   color: #334155;
@@ -1712,5 +1978,490 @@ onUnmounted(() => {
   background: white;
   border-radius: 16px;
   color: #64748b;
+}
+
+/* 面试详情弹窗 */
+.detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.detail-modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.detail-modal-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detail-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.detail-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+}
+
+.detail-error {
+  text-align: center;
+  padding: 40px;
+}
+
+.detail-info-card {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.detail-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.in_progress {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.status-badge.completed {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-badge.interrupted {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.score-value {
+  font-weight: 700;
+}
+
+.score-value.high {
+  color: #059669;
+}
+
+.score-value.medium {
+  color: #d97706;
+}
+
+.score-value.low {
+  color: #dc2626;
+}
+
+.detail-section {
+  margin-bottom: 24px;
+}
+
+.detail-section h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px;
+}
+
+.comment-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 12px;
+  margin: 0;
+}
+
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qa-item {
+  background: #f8fafc;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.qa-item.expanded {
+  border-color: #6366f1;
+}
+
+.qa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.qa-header:hover {
+  background: #f1f5f9;
+}
+
+.qa-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.qa-number {
+  width: 28px;
+  height: 28px;
+  background: #6366f1;
+  color: white;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.qa-question {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  flex: 1;
+}
+
+.qa-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.qa-score {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.qa-score.high {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.qa-score.medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.qa-score.low {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.expand-icon {
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+
+.qa-item.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.qa-content {
+  padding: 0 16px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.qa-answer-section,
+.qa-evaluation-section,
+.qa-suggestion-section {
+  padding: 16px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.qa-answer-section:last-child,
+.qa-evaluation-section:last-child,
+.qa-suggestion-section:last-child {
+  border-bottom: none;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.section-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+  margin: 0;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+.btn.secondary {
+  padding: 10px 20px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn.secondary:hover {
+  background: #e2e8f0;
+}
+
+/* 评分卡片 */
+.detail-score-card {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  color: white;
+}
+
+.detail-score-circle {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 16px;
+}
+
+.detail-score-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score-progress {
+  transition: stroke-dashoffset 1s ease;
+}
+
+.detail-score-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-score-number {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.detail-score-label {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.detail-score-feedback {
+  font-size: 14px;
+  line-height: 1.6;
+  opacity: 0.9;
+  margin: 0;
+}
+
+/* 章节标题 */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.section-title.success {
+  color: #059669;
+}
+
+.section-title.warning {
+  color: #d97706;
+}
+
+/* 列表样式 */
+.detail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.list-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.list-dot.success {
+  background: #10b981;
+}
+
+.list-dot.warning {
+  background: #f59e0b;
+}
+
+/* 问题分类标签 */
+.qa-category {
+  padding: 2px 10px;
+  background: #eef2ff;
+  color: #6366f1;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* 未回答样式 */
+.no-answer {
+  color: #ef4444;
+  font-style: italic;
+}
+
+/* 参考答案文本 */
+.reference-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+/* 章节标签带图标 */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.section-label svg {
+  color: #6366f1;
 }
 </style>

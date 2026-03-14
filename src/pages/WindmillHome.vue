@@ -537,7 +537,7 @@ const dragStartRotation = ref(0)
 const startMouseAngle = ref(0)
 
 const items = [
-  { label: '工作台', path: '/app/dashboard', icon: LayoutDashboard },
+  { label: '简历库', path: '/app/resumes', icon: LayoutDashboard },
   { label: '开始面试', path: '/app/interview', icon: Mic },
   { label: '面试记录', path: '/app/records', icon: History },
   { label: '面试统计', path: '/app/analytics', icon: ChartLine },
