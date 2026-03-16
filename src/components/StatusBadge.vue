@@ -35,6 +35,7 @@ const statusText = computed(() => {
   }
   if (isEvaluateCompleted(interview)) return '已完成'
   if (interview.status === 'IN_PROGRESS') return '进行中'
+  if (interview.status === 'INTERRUPTED') return '已中断'
   if (interview.status === 'COMPLETED' || interview.status === 'EVALUATED') return '已提交'
   return '已创建'
 })
@@ -45,6 +46,7 @@ const statusClass = computed(() => {
   if (isEvaluating(interview)) return 'evaluating'
   if (isEvaluateFailed(interview)) return 'failed'
   if (interview.status === 'IN_PROGRESS') return 'in-progress'
+  if (interview.status === 'INTERRUPTED') return 'interrupted'
   return 'created'
 })
 
@@ -87,6 +89,11 @@ const statusIcon = computed(() => {
 .status-badge.in-progress {
   background: #fef3c7;
   color: #d97706;
+}
+
+.status-badge.interrupted {
+  background: #fef2f2;
+  color: #dc2626;
 }
 
 .status-badge.created {

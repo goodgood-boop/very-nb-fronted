@@ -3,7 +3,7 @@
  */
 
 // 后端已配置 CORS，直接使用完整 URL
-const API_BASE_URL = 'http://113.54.240.73:8080';
+const API_BASE_URL = 'http://localhost:8080';
 
 /**
  * 统一处理响应

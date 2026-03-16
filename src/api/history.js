@@ -1,4 +1,4 @@
-const API_BASE = 'http://113.54.240.73:8080'
+const API_BASE = 'http://localhost:8080'
 
 /**
  * 处理响应 - 与 EchoMind-feature- 保持一致

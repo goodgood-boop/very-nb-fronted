@@ -16,7 +16,7 @@ import { pinyin } from 'pinyin-pro'
 
 const MODEL_JSON_PATH = '/models/kei/kei_vowels_pro/runtime/kei_vowels_pro.model3.json'
 // 后端已配置 CORS，直接使用完整 URL
-const API_BASE = 'http://113.54.240.73:8080'
+const API_BASE = 'http://localhost:8080'
 
 const emit = defineEmits(['subtitle', 'speaking'])
 const wrap = ref(null)
@@ -320,7 +320,9 @@ function tickModel(tick) {
 }
 
 // ---------------- public methods ----------------
-async function speak(text, voice = 'zh-CN-XiaoxiaoNeural', rate = '+0%') {
+// 修复：voice 参数直接使用后端配置的声音名称（如 'anna'）
+// rate 参数转换为数字（如 1.0）
+async function speak(text, voice = 'anna', rate = 1.0) {
   if (!model) return
   const t = String(text || '').trim()
   if (!t) return
@@ -342,23 +344,43 @@ async function speak(text, voice = 'zh-CN-XiaoxiaoNeural', rate = '+0%') {
   if (rafId) cancelAnimationFrame(rafId)
   rafId = null
 
-  // 1) request TTS
-  const resp = await fetch(`${API_BASE}/api/interview/sessions/tts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: t, voice, rate }),
-  })
-  if (!resp.ok) {
-    let detail = ''
-    try { detail = JSON.stringify(await resp.json()) } catch {}
-    emit('speaking', false)
-    throw new Error(`TTS failed: ${resp.status} ${detail}`)
-  }
-  const ab = await resp.arrayBuffer()
-  if (!ab || ab.byteLength === 0) {
-    emit('speaking', false)
-    throw new Error('TTS returned empty audio')
-  }
+  // 修复：确保 rate 是数字类型
+  const rateNum = typeof rate === 'string' ? parseFloat(rate) || 1.0 : rate
+
+  try {
+    // 1) request TTS
+    const resp = await fetch(`${API_BASE}/api/interview/sessions/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: t, voice, rate: rateNum }),
+    })
+
+    // 处理 TTS 服务未启用的情况（503）
+    if (resp.status === 503) {
+      console.warn('TTS 服务未启用，直接显示文本')
+      emit('subtitle', t)
+      emit('speaking', false)
+      return
+    }
+
+    if (!resp.ok) {
+      let detail = ''
+      try { detail = JSON.stringify(await resp.json()) } catch {}
+      emit('speaking', false)
+      // 降级：显示完整文本
+      emit('subtitle', t)
+      console.error(`TTS failed: ${resp.status} ${detail}`)
+      return
+    }
+
+    const ab = await resp.arrayBuffer()
+    if (!ab || ab.byteLength === 0) {
+      emit('speaking', false)
+      // 降级：显示完整文本
+      emit('subtitle', t)
+      console.error('TTS returned empty audio')
+      return
+    }
 
   const url = URL.createObjectURL(new Blob([ab], { type: 'audio/mpeg' }))
 
@@ -427,10 +449,20 @@ async function speak(text, voice = 'zh-CN-XiaoxiaoNeural', rate = '+0%') {
   } catch (e) {
     emit('speaking', false)
     URL.revokeObjectURL(url)
-    throw e
+    // 降级：显示完整文本
+    emit('subtitle', t)
+    console.error('音频播放失败:', e)
+    return
   }
 
   rafId = requestAnimationFrame(subTick)
+  } catch (error) {
+    // 捕获所有 TTS 相关错误
+    console.error('TTS 处理失败:', error)
+    emit('speaking', false)
+    // 降级：显示完整文本
+    emit('subtitle', t)
+  }
 }
 
 function debugMouth() {

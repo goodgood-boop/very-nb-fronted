@@ -221,7 +221,7 @@ import { interviewApi } from '../api/interview.js'
 
 // EchoMind-37a 后端地址
 // 后端已配置 CORS，直接使用完整 URL
-const API_BASE = 'http://113.54.240.73:8080'
+const API_BASE = 'http://localhost:8080'
 
 const router = useRouter()
 const route = useRoute()
@@ -293,15 +293,8 @@ const transcript = ref([]) // { id, role:'interviewer'|'candidate', text }
 const qMsgs = computed(() => transcript.value.filter(m => m.role === 'interviewer'))
 const aMsgs = computed(() => transcript.value.filter(m => m.role === 'candidate'))
 
-// 合并所有消息用于显示（兼容旧代码）
-const allMessages = computed(() => {
-  return [...transcript.value].sort((a, b) => {
-    // 从id中提取时间戳进行比较
-    const timeA = parseFloat(a.id.split('-')[0])
-    const timeB = parseFloat(b.id.split('-')[0])
-    return timeA - timeB
-  })
-})
+// 合并所有消息用于显示
+const allMessages = computed(() => transcript.value)
 
 const draft = ref('')
 
@@ -333,6 +326,9 @@ const inputMode = ref('text')
 const listening = ref(false)
 const voiceStartedAt = ref(0)
 
+// 语音分析结果
+const lastVoiceAnalysis = ref(null)
+
 // 设置弹窗
 const openSettings = ref(false)
 watch(openSettings, (v) => {
@@ -357,17 +353,10 @@ const chatMessagesRef = ref(null)
 const scrollAnchor = ref(null)
 const chatScroll = ref(null)
 
-// 自动滚动到底部（使用滚动锚点）
+// 自动滚动到底部
 function scrollToBottom() {
   nextTick(() => {
-    // 使用滚动锚点自动滚动到底部
-    if (scrollAnchor.value) {
-      scrollAnchor.value.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
-    // 兼容旧代码
-    if (chatScroll.value) {
-      chatScroll.value.scrollTop = chatScroll.value.scrollHeight
-    }
+    // 直接滚动容器到底部
     if (chatMessagesRef.value) {
       chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
     }
@@ -679,6 +668,8 @@ function restoreSession(sessionToRestore) {
         }
       }
     }
+    // 恢复完成后滚动到底部
+    scrollToBottom()
     
     // 保存到localStorage
     localStorage.setItem('interviewConfig', JSON.stringify({
@@ -848,28 +839,45 @@ async function testSpeak(){
 }
 
 // 语音识别：调用ASR接口
+// 后端返回 AsrAnalysisResult 对象，包含 transcription 等字段
 async function transcribeAudio(audioBlob) {
   try {
     const formData = new FormData()
     formData.append('file', audioBlob, 'recording.wav')
-    
+
     const response = await fetch(`${API_BASE}/api/interview/sessions/asr`, {
       method: 'POST',
       body: formData
     })
-    
+
     if (!response.ok) {
       throw new Error(`语音识别失败: ${response.status}`)
     }
-    
+
+    // 后端直接返回 AsrAnalysisResult 对象
     const result = await response.json()
+
+    // 检查是否包含 transcription 字段（后端返回格式）
+    if (result && result.transcription) {
+      // 保存完整的语音分析结果供展示
+      lastVoiceAnalysis.value = {
+        confidenceScore: result.confidenceScore,
+        tensionScore: result.tensionScore,
+        speechSpeed: result.speechSpeed,
+        analysisReason: result.analysisReason
+      }
+      return result.transcription
+    }
+
+    // 兼容旧格式（如果后端返回 { success, result, msg }）
     if (result.success && result.result) {
       return result.result
-    } else {
-      throw new Error(`语音识别失败: ${result.msg}`)
     }
+
+    throw new Error('语音识别返回格式错误')
   } catch (error) {
     console.error('语音识别失败:', error)
+    subtitle.value = '语音识别失败，请重试或使用文字输入'
     // 降级到显示时长
     return null
   }

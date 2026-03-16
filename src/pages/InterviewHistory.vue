@@ -398,8 +398,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { 
   Users, 
   CheckCircle, 
@@ -428,6 +428,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import ScoreDisplay from '../components/ScoreDisplay.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // 状态
 const interviews = ref([])
@@ -510,7 +511,8 @@ const filteredInterviews = computed(() => {
   if (currentFilter.value === 'completed') {
     result = result.filter(i => isEvaluateCompleted(i))
   } else if (currentFilter.value === 'in_progress') {
-    result = result.filter(i => !isEvaluateCompleted(i) && i.status === 'IN_PROGRESS')
+    // 显示所有未完成的面试（包括进行中、已中断、已提交但未评估的）
+    result = result.filter(i => !isEvaluateCompleted(i))
   }
   
   return result
@@ -754,6 +756,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopPolling()
+})
+
+// 监听路由变化，当从其他页面跳转回来时刷新数据
+watch(() => route.path, (newPath, oldPath) => {
+  if (newPath === '/app/records' && oldPath !== '/app/records') {
+    loadData()
+  }
 })
 </script>
 

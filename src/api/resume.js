@@ -53,7 +53,7 @@ export const resumeApi = {
    */
   async exportAnalysisPdf(resumeId) {
     const response = await fetch(
-      `${import.meta.env.PROD ? '' : 'http://113.54.240.73:8080'}/api/resumes/${resumeId}/export/analysis`
+      `${import.meta.env.PROD ? '' : 'http://localhost:8080'}/api/resumes/${resumeId}/export/analysis`
     )
     if (!response.ok) {
       throw new Error(`导出失败: ${response.status}`)

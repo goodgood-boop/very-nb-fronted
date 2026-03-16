@@ -6,7 +6,7 @@
 import axios from 'axios'
 
 // 后端基础 URL
-const baseURL = import.meta.env.PROD ? '' : 'http://113.54.240.73:8080'
+const baseURL = import.meta.env.PROD ? '' : 'http://localhost:8080'
 
 // 创建 axios 实例
 const instance = axios.create({
