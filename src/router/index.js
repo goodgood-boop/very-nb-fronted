@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { isAuthed } from '../lib/auth'
-
+// 导入新组件
+import DashboardNewHome from '../pages/DashboardNewHome.vue'
 import Auth from '../pages/Auth.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
-import WindmillHome from '../pages/WindmillHome.vue'
 import InterviewRoom from '../pages/InterviewRoom.vue'
 import InterviewHistory from '../pages/InterviewHistory.vue'
 import ResumeUpload from '../pages/ResumeUpload.vue'
@@ -32,7 +32,28 @@ const router = createRouter({
       component: AppLayout,
       children: [
         { path: '', redirect: '/app/home' },
-        { path: 'home', component: WindmillHome, meta: { title: '主页' } },
+        {
+  path: 'home',
+  component: DashboardNewHome,
+  meta: { title: '主页' },
+  children: [
+    {
+      path: 'interview',
+      component: InterviewRoom,
+      meta: { title: '面试房间' }
+    },
+    {
+      path: 'qa',
+      component: KnowledgeBaseChat,
+      meta: { title: '问答助手' }
+    },
+    {
+      path: 'resumes',
+      component: ResumeList,
+      meta: { title: '简历库' }
+    }
+  ]
+},
         { path: 'interview', component: ResumeUpload, meta: { title: '上传简历' } },
         { path: 'resumes', component: ResumeList, meta: { title: '简历库' } },
         { path: 'resume-analysis/:resumeId', component: ResumeAnalysis, meta: { title: '简历分析' } },

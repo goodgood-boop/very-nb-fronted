@@ -1,15 +1,21 @@
 <template>
-  <div class="interview-room page-with-bg">
-    <!-- 右上角：暂停/设置（极简） -->
-    <div class="room-corner">
-      <button class="icon-btn" @click="togglePause" :title="paused ? '继续' : '暂停'">
-        {{ paused ? '▶' : '⏸' }}
-      </button>
-      <button class="icon-btn" @click="openSettings=true" title="设置">⚙</button>
-    </div>
-
+  <div class="interview-room page-with-bg" :class="{ 'fullscreen-mode': isFullscreen }">
     <!-- 中间：Live2D面试官 -->
     <div class="avatar-section">
+        <!-- 在这里添加按钮组 -->
+      <div class="avatar-header">
+        <div class="button-group">
+          <FullscreenButton 
+            v-model="isFullscreen"
+            @toggle="onFullscreenToggle"
+          />
+          <button class="icon-btn" @click="togglePause" :title="paused ? '继续' : '暂停'">
+            {{ paused ? '▶' : '⏸' }}
+          </button>
+          <button class="icon-btn" @click="openSettings=true" title="设置">⚙</button>
+        </div>
+      </div>
+
       <div class="live2d-stage" :class="speaking ? 'speaking' : ''">
         <Live2DAvatar ref="avatar" @subtitle="subtitle=$event" @speaking="speaking=$event" />
       </div>
@@ -215,6 +221,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } 
 import { useRouter, useRoute } from 'vue-router'
 import Modal from '../components/ui/Modal.vue'
 import Live2DAvatar from '../components/Live2DAvatar.vue'
+import FullscreenButton from '../components/home/FullscreenButton.vue'  // 添加这行
 import { QUESTION_BANK } from '../lib/mockQuestions'
 import { addRecord, labelType } from '../lib/records'
 import { interviewApi } from '../api/interview.js'
@@ -225,6 +232,18 @@ const API_BASE = 'http://localhost:8080'
 
 const router = useRouter()
 const route = useRoute()
+// 添加全屏状态
+const isFullscreen = ref(false)
+// 定义事件
+const emit = defineEmits(['fullscreen-change'])
+
+// 添加全屏事件处理
+const onFullscreenToggle = (value) => {
+  isFullscreen.value = value
+  emit('fullscreen-change', value)
+}
+
+
 
 // Live2D 实例（组件 ref），用于调用 speak/unlockAudio
 const avatar = ref(null)
@@ -1066,15 +1085,6 @@ onBeforeUnmount(() => {
   z-index: 0;
 }
 
-/* 右上角控制按钮 */
-.room-corner {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  display: flex;
-  gap: 10px;
-  z-index: 100;
-}
 
 .icon-btn {
   width: 40px;
@@ -1124,6 +1134,7 @@ onBeforeUnmount(() => {
   color: var(--text);
 }
 
+
 .progress-percent {
   font-size: 14px;
   color: var(--muted);
@@ -1149,8 +1160,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   padding: 4px 12px;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: var(--panel2);
+  color: var(--brand);
   font-size: 12px;
   font-weight: 500;
   border-radius: 20px;
@@ -1163,10 +1174,50 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-top: 80px;
+  padding-top: 60px;
   padding-bottom: 20px;
   position: relative;
   z-index: 1;
+}
+/* 新增：按钮组样式 */
+.avatar-header {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* 修改图标按钮样式 */
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text);
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: var(--panel2);
+  border-color: var(--stroke2);
+}
+
+/* 确保全屏按钮适配 */
+.avatar-header :deep(.fullscreen-btn) {
+  position: static;
+  width: 36px;
+  height: 36px;
 }
 
 .live2d-stage {
@@ -1198,7 +1249,7 @@ onBeforeUnmount(() => {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--bg1);
   border-radius: 16px 16px 0 0;
   margin: 0 20px;
 }
@@ -1235,7 +1286,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-  background: #ccc;
+  background: var(--stroke);
   border-radius: 2px;
 }
 
@@ -1273,36 +1324,36 @@ onBeforeUnmount(() => {
   font-size: 14px;
   line-height: 1.6;
   word-wrap: break-word;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow);
   position: relative;
 }
 
 /* 面试官消息 - 白色气泡，左对齐 */
 .message-bubble.interviewer {
-  background: white;
-  color: #333;
-  border: 1px solid #e0e0e0;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--stroke);
   border-top-left-radius: 4px;
 }
 
 /* 用户消息 - 绿色气泡，右对齐 */
 .message-bubble.candidate {
-  background: #95ec69;
-  color: #333;
+  background: var(--ok);
+  color: white;
   border: none;
   border-top-right-radius: 4px;
 }
 
 .message-sender {
   font-size: 12px;
-  color: #999;
+  color: var(--muted);
   margin-bottom: 4px;
   font-weight: 500;
 }
 
 .message-bubble.candidate .message-sender {
   text-align: right;
-  color: #5a9c3a;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .message-text {
@@ -1312,7 +1363,7 @@ onBeforeUnmount(() => {
 /* 占位符样式 */
 .chat-placeholder {
   text-align: center;
-  color: #999;
+  color: var(--muted);
   font-size: 14px;
   padding: 60px 20px;
   display: flex;
@@ -1584,4 +1635,5 @@ onBeforeUnmount(() => {
     font-size: 13px;
   }
 }
+
 </style>

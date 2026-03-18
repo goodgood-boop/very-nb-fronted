@@ -1,13 +1,7 @@
 <template>
   <div class="layout">
     <main class="main">
-      <!-- Back Button for non-Windmill pages -->
-      <div v-if="!isWindmill" class="back-nav">
-        <button @click="goHome" class="back-btn">
-          <ArrowLeft :size="20" />
-          <span>返回主页</span>
-        </button>
-      </div>
+      
 
       <router-view v-slot="{ Component, route }">
         <transition 
@@ -45,7 +39,8 @@
   left: 0;
   will-change: clip-path, transform, opacity;
   overflow-y: auto; /* Enable scrolling for sub-pages */
-  background: transparent; /* Allow stacking context */
+  background: var(--bg0); /* 使用主题背景色 */
+  transition: background-color 0.3s ease; /* 主题切换时平滑过渡 */
 }
 
 /* Ensure Windmill home doesn't scroll unnecessarily */
@@ -70,12 +65,31 @@ const goHome = () => {
   router.push('/app/home')
 }
 
+// 保存最后一次点击位置
+let lastClickPosition = { x: 90, y: 90 }
+
+// 获取动画起点位置
+const getTransitionOrigin = () => {
+  const saved = localStorage.getItem('transitionOrigin')
+  if (saved) {
+    try {
+      const pos = JSON.parse(saved)
+      lastClickPosition = pos
+      localStorage.removeItem('transitionOrigin')
+      return pos
+    } catch (e) {
+      console.error('解析点击位置失败:', e)
+    }
+  }
+  return lastClickPosition
+}
+
 // Curtain Open Animation (Entering a sub-page from Windmill)
 const enter = (el, done) => {
-  const isEnteringWindmill = route.path === '/app/home'
+  const isEnteringHome = route.path === '/app/home'
   
-  if (isEnteringWindmill) {
-     // Entering Windmill: Fade in and scale up slightly
+  if (isEnteringHome) {
+     // Entering Home: Fade in and scale up slightly
      // Important: set absolute position to ensure it overlaps correctly
      gsap.set(el, { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 })
      gsap.fromTo(el, 
@@ -83,20 +97,22 @@ const enter = (el, done) => {
        { opacity: 1, scale: 1, duration: 1.2, ease: 'power2.out', onComplete: done }
      )
   } else {
-     // Entering Sub-page: Curtain Effect
+     // Entering Sub-page: Curtain Effect from click position
+     const origin = getTransitionOrigin()
+     
      // Set high z-index to cover the windmill
      gsap.set(el, { 
        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
-       zIndex: 100,
-       backgroundColor: '#f5f7ff' // Ensure opaque background
+       zIndex: 100
+       // 背景色由页面自身的CSS变量控制
      })
      
      gsap.fromTo(el,
        { 
-         clipPath: 'circle(0% at 90% 90%)'
+         clipPath: `circle(0% at ${origin.x}% ${origin.y}%)`
        },
        { 
-         clipPath: 'circle(150% at 90% 90%)', 
+         clipPath: `circle(150% at ${origin.x}% ${origin.y}%)`, 
          duration: 1.2, 
          ease: 'power2.inOut', 
          onComplete: () => {
@@ -109,15 +125,17 @@ const enter = (el, done) => {
 }
 
 const leave = (el, done) => {
-  const isGoingToWindmill = route.path === '/app/home'
+  const isGoingToHome = route.path === '/app/home'
   
-  if (isGoingToWindmill) {
-     // Leaving Sub-page: Shrink back to bottom-right
+  if (isGoingToHome) {
+     // Leaving Sub-page: Shrink back to click position
+     const origin = getTransitionOrigin()
+     
      // Ensure it stays on top while shrinking
      gsap.set(el, { zIndex: 100, overflow: 'hidden' })
      
      gsap.to(el, {
-       clipPath: 'circle(0% at 90% 90%)',
+       clipPath: `circle(0% at ${origin.x}% ${origin.y}%)`,
        duration: 1.0,
        ease: 'power2.inOut',
        onComplete: done
@@ -134,4 +152,5 @@ const leave = (el, done) => {
      }) 
   }
 }
+
 </script>

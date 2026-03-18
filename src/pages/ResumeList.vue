@@ -1,17 +1,21 @@
 <template>
-  <div class="resume-list-page">
+  <div class="resume-list-page" :class="{ 'fullscreen-mode': isFullscreen }">
+    <!-- 右上角全屏按钮 -->
+    <div class="page-header-fullscreen">
+      <FullscreenButton 
+        v-model="isFullscreen"
+        @toggle="onFullscreenToggle"
+      />
+    </div>
     <!-- 头部 -->
     <div class="page-header">
-      <div class="header-left">
-        <button class="btn-back" @click="router.back()">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="15,18 9,12 15,6"/>
-          </svg>
-        </button>
-        <div>
-          <h1 class="page-title">简历库</h1>
-          <p class="page-subtitle">管理您已分析过的所有简历及面试记录</p>
-        </div>
+      <!-- 左侧留白，用来平衡布局 -->
+      <div class="header-left-placeholder"></div>
+      
+      <!-- 标题居中 -->
+      <div class="header-title">
+        <h1 class="page-title">简历库</h1>
+        <p class="page-subtitle">管理您已分析过的所有简历及面试记录</p>
       </div>
       
       <div class="search-box">
@@ -164,9 +168,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { resumeApi } from '../api/resume.js'
-
+import FullscreenButton from '../components/home/FullscreenButton.vue'  // 导入全屏按钮
 const router = useRouter()
+// ===== 新增：全屏相关 =====
+const emit = defineEmits(['fullscreen-change'])
+const isFullscreen = ref(false)
 
+const onFullscreenToggle = (value) => {
+  isFullscreen.value = value
+  emit('fullscreen-change', value)
+}
+// ===== 全屏相关结束 =====
 // 状态
 const resumes = ref([])
 const loading = ref(true)
@@ -256,6 +268,19 @@ onMounted(() => {
   max-width: none;
   margin: 0;
   box-sizing: border-box;
+  position: relative;  /* 添加这行，为绝对定位的全屏按钮提供参考 */
+  background: var(--bg0);
+  min-height: 100vh;
+}
+/* ===== 新增：全屏按钮样式 ===== */
+.page-header-fullscreen {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 100;
+}
+.header-left-placeholder {
+  width: 200px; /* 与右侧搜索框宽度对应，保持平衡 */
 }
 
 .page-header {
@@ -265,6 +290,11 @@ onMounted(() => {
   margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 16px;
+  min-height: 60px; /* 给返回按钮留出空间 */
+}
+.header-title {
+  text-align: center;
+  flex: 1;
 }
 
 .header-left {
@@ -294,13 +324,13 @@ onMounted(() => {
 .page-title {
   font-size: 24px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text);
   margin: 0;
 }
 
 .page-subtitle {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--muted);
   margin: 4px 0 0;
 }
 
@@ -314,23 +344,24 @@ onMounted(() => {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9ca3af;
+  color: var(--muted2);
 }
 
 .search-input {
   width: 100%;
   padding: 10px 12px 10px 40px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--stroke);
   border-radius: 10px;
   font-size: 14px;
-  background: white;
+  background: var(--panel);
+  color: var(--text);
   transition: all 0.2s;
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
 }
 
 .loading-state {
@@ -341,8 +372,8 @@ onMounted(() => {
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #6366f1;
+  border: 3px solid var(--stroke);
+  border-top-color: var(--brand);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;
@@ -355,9 +386,9 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 80px 20px;
-  background: white;
+  background: var(--panel);
   border-radius: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--stroke);
 }
 
 .empty-icon {
@@ -368,19 +399,19 @@ onMounted(() => {
 .empty-state h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text);
   margin: 0 0 8px;
 }
 
 .empty-state p {
-  color: #6b7280;
+  color: var(--muted);
   margin: 0 0 24px;
 }
 
 .resume-table-container {
-  background: white;
+  background: var(--panel);
   border-radius: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--stroke);
   overflow: hidden;
 }
 
@@ -394,15 +425,15 @@ onMounted(() => {
   padding: 16px;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--muted);
   text-transform: uppercase;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--stroke);
 }
 
 .resume-table td {
   padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--stroke);
 }
 
 .resume-row {
@@ -411,7 +442,7 @@ onMounted(() => {
 }
 
 .resume-row:hover {
-  background-color: #f9fafb;
+  background-color: var(--panel2);
 }
 
 .resume-row:last-child td {
@@ -427,21 +458,21 @@ onMounted(() => {
 .file-icon {
   width: 40px;
   height: 40px;
-  background: #eef2ff;
+  background: var(--panel2);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6366f1;
+  color: var(--brand);
 }
 
 .filename {
   font-weight: 500;
-  color: #111827;
+  color: var(--text);
 }
 
 .date-cell {
-  color: #6b7280;
+  color: var(--muted);
 }
 
 .score-cell {
@@ -453,7 +484,7 @@ onMounted(() => {
 .score-bar {
   width: 80px;
   height: 6px;
-  background: #e5e7eb;
+  background: var(--stroke);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -465,24 +496,24 @@ onMounted(() => {
 }
 
 .score-fill.high {
-  background: #10b981;
+  background: var(--ok);
 }
 
 .score-fill.medium {
-  background: #f59e0b;
+  background: var(--warn);
 }
 
 .score-fill.low {
-  background: #ef4444;
+  background: var(--bad);
 }
 
 .score-value {
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
 }
 
 .no-score {
-  color: #9ca3af;
+  color: var(--muted2);
 }
 
 .status-badge {
@@ -496,13 +527,13 @@ onMounted(() => {
 }
 
 .status-badge.completed {
-  background: #d1fae5;
-  color: #059669;
+  background: rgba(54, 211, 153, 0.2);
+  color: var(--ok);
 }
 
 .status-badge.pending {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--panel2);
+  color: var(--muted);
 }
 
 .action-col {
@@ -525,13 +556,13 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--muted2);
   transition: all 0.2s;
 }
 
 .action-btn:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--bad);
 }
 
 .action-btn:disabled {
@@ -540,12 +571,12 @@ onMounted(() => {
 }
 
 .arrow-icon {
-  color: #d1d5db;
+  color: var(--stroke);
   transition: all 0.2s;
 }
 
 .resume-row:hover .arrow-icon {
-  color: #6366f1;
+  color: var(--brand);
   transform: translateX(4px);
 }
 
@@ -572,7 +603,7 @@ onMounted(() => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--panel);
   border-radius: 16px;
   width: 100%;
   max-width: 420px;
@@ -587,13 +618,13 @@ onMounted(() => {
 }
 
 .warning-icon {
-  color: #f59e0b;
+  color: var(--warn);
 }
 
 .modal-header h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text);
   margin: 0;
 }
 
@@ -603,19 +634,19 @@ onMounted(() => {
 
 .modal-body p {
   margin: 0 0 12px;
-  color: #374151;
+  color: var(--text);
 }
 
 .hint-text {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--muted);
   margin-bottom: 8px;
 }
 
 .delete-list {
   margin: 0 0 12px;
   padding-left: 20px;
-  color: #6b7280;
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -624,7 +655,7 @@ onMounted(() => {
 }
 
 .warning-text {
-  color: #ef4444;
+  color: var(--bad);
   font-weight: 600;
   font-size: 14px;
 }
@@ -647,30 +678,30 @@ onMounted(() => {
 }
 
 .btn.primary {
-  background: #6366f1;
+  background: var(--brand);
   color: white;
 }
 
 .btn.primary:hover {
-  background: #4f46e5;
+  opacity: 0.9;
 }
 
 .btn.secondary {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--panel2);
+  color: var(--text);
 }
 
 .btn.secondary:hover {
-  background: #e5e7eb;
+  background: var(--stroke);
 }
 
 .btn.danger {
-  background: #ef4444;
+  background: var(--bad);
   color: white;
 }
 
 .btn.danger:hover {
-  background: #dc2626;
+  opacity: 0.9;
 }
 
 .btn:disabled {
@@ -687,5 +718,20 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .header-left-placeholder {
+    display: none;
+  }
+  
+  .search-box {
+    width: 100%;
+  }
 }
 </style>

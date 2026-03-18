@@ -1,17 +1,20 @@
 <template>
-  <div class="knowledge-chat-page">
-    <!-- 头部 -->
+  <div class="knowledge-chat-page" :class="{ 'fullscreen-mode': isFullscreen }">
+    <!-- 右上角全屏按钮 -->
+    
     <MotionDiv
       class="chat-header"
       :initial="{ opacity: 0, y: -20 }"
       :animate="{ opacity: 1, y: 0 }"
       :transition="{ duration: 0.5 }"
     >
+      <!-- 左侧留白，用来平衡布局 -->
+      <div class="header-left-placeholder"></div>
+
       <div class="header-left">
-        <button class="btn-icon" @click="router.push('/app/knowledge')">
-          <ArrowLeft width="20" height="20" />
-        </button>
-        <div class="header-info">
+        
+        <!-- 标题居中 -->
+        <div class="header-title">
           <h1 class="page-title">知识问答</h1>
           <p v-if="currentSession" class="session-subtitle">
             {{ currentSession.knowledgeBaseNames?.join(', ') || '通用问答' }}
@@ -338,10 +341,21 @@ import {
 import { MotionDiv } from '../components/motion'
 import VirtualList from '../components/VirtualList.vue'
 import { ragChatApi } from '../api/ragChat'
+import FullscreenButton from '../components/home/FullscreenButton.vue'  // 添加这行
 import { knowledgeBaseApi } from '../api/knowledgebase'
 
 const route = useRoute()
 const router = useRouter()
+// 添加全屏状态
+const isFullscreen = ref(false)
+// 定义事件
+const emit = defineEmits(['fullscreen-change'])
+
+// 添加全屏事件处理
+const onFullscreenToggle = (value) => {
+  isFullscreen.value = value
+  emit('fullscreen-change', value)
+}
 
 // 状态
 const sidebarOpen = ref(true)
@@ -355,6 +369,17 @@ const streaming = ref(false)
 const streamingContent = ref('')
 const messageListRef = ref(null)
 const inputRef = ref(null)
+// 修改返回函数
+const goBack = () => {
+  // 判断是从哪里来的
+  if (window.location.pathname.includes('/app/home/')) {
+    // 如果是从主页的子路由来的，返回主页
+    router.push('/app/home')
+  } else {
+    // 否则返回知识库列表
+    router.push('/app/knowledge')
+  }
+}
 
 // 新建会话
 const showNewSession = ref(false)
@@ -621,7 +646,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #f8fafc;
+  background: var(--bg0);
 }
 
 /* 头部 */
@@ -630,9 +655,17 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--stroke);
   flex-shrink: 0;
+  min-height: 72px; /* 给返回按钮留出空间 */
+}
+.header-left-placeholder {
+  width: 120px; /* 与右侧操作区域宽度对应，保持平衡 */
+}
+.header-title {
+  text-align: center;
+  flex: 1;
 }
 
 .header-left {
@@ -650,13 +683,13 @@ onMounted(() => {
 .page-title {
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text);
   margin: 0;
 }
 
 .session-subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -664,27 +697,46 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 180px; /* 固定宽度，保证左侧留白能平衡 */
+  justify-content: flex-end;
+}
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .chat-header {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  
+  .header-left-placeholder {
+    display: none;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* 按钮样式 */
 .btn-icon {
   width: 40px;
   height: 40px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke);
   border-radius: 10px;
-  background: white;
+  background: var(--panel);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-icon:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #334155;
+  background: var(--panel2);
+  border-color: var(--stroke2);
+  color: var(--text);
 }
 
 .btn-icon.small {
@@ -697,10 +749,10 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
   border-radius: 10px;
-  color: #475569;
+  color: var(--text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -708,8 +760,8 @@ onMounted(() => {
 }
 
 .btn-secondary:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--panel2);
+  border-color: var(--stroke2);
 }
 
 .btn-primary {
@@ -717,7 +769,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--brand);
   border: none;
   border-radius: 10px;
   color: white;
@@ -729,7 +781,7 @@ onMounted(() => {
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-hover);
 }
 
 .btn-primary:disabled {
@@ -739,7 +791,7 @@ onMounted(() => {
 
 .btn-danger {
   padding: 10px 20px;
-  background: #ef4444;
+  background: var(--bad);
   border: none;
   border-radius: 8px;
   color: white;
@@ -750,21 +802,23 @@ onMounted(() => {
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: var(--bad);
+  opacity: 0.9;
 }
 
 .btn-text {
   padding: 8px 16px;
   background: transparent;
   border: none;
-  color: #6366f1;
+  color: var(--brand);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-text:hover {
-  color: #4f46e5;
+  color: var(--brand);
+  opacity: 0.8;
   text-decoration: underline;
 }
 
@@ -778,8 +832,8 @@ onMounted(() => {
 /* 侧边栏 */
 .sidebar {
   width: 280px;
-  background: white;
-  border-right: 1px solid #e2e8f0;
+  background: var(--panel);
+  border-right: 1px solid var(--stroke);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -790,13 +844,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--stroke);
 }
 
 .sidebar-header h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0;
 }
 
@@ -817,11 +871,11 @@ onMounted(() => {
 }
 
 .session-item:hover {
-  background: #f8fafc;
+  background: var(--panel2);
 }
 
 .session-item.active {
-  background: #eef2ff;
+  background: var(--panel2);
 }
 
 .session-content {
@@ -836,7 +890,7 @@ onMounted(() => {
 }
 
 .session-icon {
-  color: #94a3b8;
+  color: var(--muted2);
   flex-shrink: 0;
 }
 
@@ -844,24 +898,24 @@ onMounted(() => {
   flex: 1;
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .session-item.active .session-title {
-  color: #6366f1;
+  color: var(--brand);
 }
 
 .pin-icon {
-  color: #f59e0b;
+  color: var(--warn);
   flex-shrink: 0;
 }
 
 .session-meta {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--muted2);
   margin-top: 4px;
 }
 
@@ -885,23 +939,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: var(--muted2);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .action-btn:hover {
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--panel2);
+  color: var(--muted);
 }
 
 .action-btn.pinned {
-  color: #f59e0b;
+  color: var(--warn);
 }
 
 .action-btn.delete:hover {
-  background: #fef2f2;
-  color: #ef4444;
+  background: rgba(255, 90, 90, 0.1);
+  color: var(--bad);
 }
 
 .empty-sessions {
@@ -910,7 +964,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: #94a3b8;
+  color: var(--muted2);
   gap: 8px;
 }
 
@@ -948,7 +1002,7 @@ onMounted(() => {
 .empty-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--brand);
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -959,13 +1013,13 @@ onMounted(() => {
 .empty-content h2 {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text);
   margin: 0;
 }
 
 .empty-content p {
   font-size: 14px;
-  color: #64748b;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -991,24 +1045,24 @@ onMounted(() => {
 .welcome-icon {
   width: 64px;
   height: 64px;
-  background: #eef2ff;
+  background: var(--panel2);
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6366f1;
+  color: var(--brand);
 }
 
 .welcome-message h3 {
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0;
 }
 
 .welcome-message p {
   font-size: 14px;
-  color: #64748b;
+  color: var(--muted);
   margin: 0;
 }
 
@@ -1043,13 +1097,13 @@ onMounted(() => {
 }
 
 .avatar.user {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--brand);
   color: white;
 }
 
 .avatar.assistant {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--panel2);
+  color: var(--muted);
 }
 
 .message-content {
@@ -1072,20 +1126,20 @@ onMounted(() => {
 }
 
 .message.assistant .message-bubble {
-  background: white;
-  border: 1px solid #e2e8f0;
-  color: #334155;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  color: var(--text);
   border-top-left-radius: 4px;
 }
 
 .message.user .message-bubble {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--brand);
   color: white;
   border-top-right-radius: 4px;
 }
 
 .message.streaming .message-bubble {
-  background: #f8fafc;
+  background: var(--panel2);
 }
 
 .message-text {
@@ -1093,8 +1147,8 @@ onMounted(() => {
 }
 
 .message-text :deep(.code-block) {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: var(--bg0);
+  color: var(--text);
   padding: 16px;
   border-radius: 8px;
   overflow-x: auto;
@@ -1104,11 +1158,11 @@ onMounted(() => {
 }
 
 .message-text :deep(.inline-code) {
-  background: #f1f5f9;
+  background: var(--panel2);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
-  color: #6366f1;
+  color: var(--brand);
 }
 
 .message.user .message-text :deep(.inline-code) {
@@ -1118,7 +1172,7 @@ onMounted(() => {
 
 .typing-cursor {
   animation: blink 1s infinite;
-  color: #6366f1;
+  color: var(--brand);
 }
 
 @keyframes blink {
@@ -1131,7 +1185,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--muted2);
 }
 
 .message.user .message-meta {
@@ -1142,14 +1196,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #6366f1;
+  color: var(--brand);
 }
 
 /* 输入区域 */
 .input-area {
   padding: 20px 24px;
-  background: white;
-  border-top: 1px solid #e2e8f0;
+  background: var(--panel);
+  border-top: 1px solid var(--stroke);
 }
 
 .selected-kbs {
@@ -1162,7 +1216,7 @@ onMounted(() => {
 
 .kb-label {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--muted2);
 }
 
 .kb-tag {
@@ -1170,10 +1224,10 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #eef2ff;
+  background: var(--panel2);
   border-radius: 6px;
   font-size: 12px;
-  color: #6366f1;
+  color: var(--brand);
 }
 
 .input-wrapper {
@@ -1185,7 +1239,7 @@ onMounted(() => {
 .chat-input {
   flex: 1;
   padding: 12px 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke);
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.5;
@@ -1194,18 +1248,20 @@ onMounted(() => {
   max-height: 150px;
   font-family: inherit;
   transition: all 0.2s;
+  background: var(--panel);
+  color: var(--text);
 }
 
 .chat-input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
 }
 
 .send-btn {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--brand);
   border: none;
   border-radius: 12px;
   display: flex;
@@ -1219,7 +1275,7 @@ onMounted(() => {
 
 .send-btn:hover:not(:disabled) {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-hover);
 }
 
 .send-btn:disabled {
@@ -1228,12 +1284,12 @@ onMounted(() => {
 }
 
 .send-btn.sending {
-  background: #94a3b8;
+  background: var(--muted2);
 }
 
 .input-hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--muted2);
   margin: 8px 0 0;
   text-align: center;
 }
@@ -1251,7 +1307,7 @@ onMounted(() => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--panel);
   border-radius: 16px;
   width: 100%;
   max-width: 480px;
@@ -1270,18 +1326,18 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--stroke);
 }
 
 .modal-header h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin: 0;
 }
 
 .warning-icon {
-  color: #f59e0b;
+  color: var(--warn);
 }
 
 .modal-body {
@@ -1294,7 +1350,7 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--stroke);
 }
 
 /* 表单 */
@@ -1310,35 +1366,37 @@ onMounted(() => {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
+  color: var(--text);
   margin-bottom: 8px;
 }
 
 .required {
-  color: #ef4444;
+  color: var(--bad);
 }
 
 .form-input {
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke);
   border-radius: 8px;
   font-size: 14px;
   transition: all 0.2s;
   box-sizing: border-box;
+  background: var(--panel);
+  color: var(--text);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
 }
 
 .loading-text {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #64748b;
+  color: var(--muted);
   font-size: 14px;
 }
 
@@ -1347,7 +1405,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   padding: 32px;
-  color: #94a3b8;
+  color: var(--muted2);
   gap: 12px;
 }
 
@@ -1368,15 +1426,15 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--stroke);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .kb-item:hover:not(.disabled) {
-  border-color: #6366f1;
-  background: #fafafa;
+  border-color: var(--brand);
+  background: var(--panel2);
 }
 
 .kb-item.disabled {
@@ -1387,7 +1445,7 @@ onMounted(() => {
 .kb-item input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #6366f1;
+  accent-color: var(--brand);
 }
 
 .kb-info {
@@ -1399,17 +1457,17 @@ onMounted(() => {
 
 .kb-name {
   font-size: 14px;
-  color: #334155;
+  color: var(--text);
 }
 
 .kb-status {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--muted2);
 }
 
 .hint {
   font-size: 13px;
-  color: #64748b;
+  color: var(--muted);
   margin: 8px 0 0;
 }
 
@@ -1457,4 +1515,13 @@ onMounted(() => {
     max-width: 85%;
   }
 }
+/* 添加全屏按钮样式 */
+.chat-header-fullscreen {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+}
+
+
 </style>
