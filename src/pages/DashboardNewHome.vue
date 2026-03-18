@@ -1,5 +1,8 @@
 <template>
   <div class="dashboard-new-home" :class="{ 'fullscreen-mode': isFullscreen }">
+    <!-- 粒子背景 -->
+    <ParticleBackground />
+    
     <!-- 三栏主体 -->
     <div class="columns-container">
       <!-- 左栏：全屏时隐藏 -->
@@ -56,6 +59,7 @@ import LeftColumn from '../components/home/LeftColumn.vue'
 import MiddleColumn from '../components/home/MiddleColumn.vue'
 import RightColumn from '../components/home/RightColumn.vue'
 import BottomBar from '../components/home/BottomBar.vue'
+import ParticleBackground from '../components/ParticleBackground.vue'
 
 // 悬停状态
 const leftHover = ref(false)
@@ -155,11 +159,18 @@ const middleWidth = computed(() => {
   overflow: hidden;
   background: var(--bg0);
   transition: all 0.3s ease;
+  position: relative;
 }
 
 /* 全屏模式样式 */
 .dashboard-new-home.fullscreen-mode {
   background: var(--bg0);
+}
+
+/* 确保内容在粒子背景之上 */
+.columns-container {
+  position: relative;
+  z-index: 1;
 }
 
 /* 三栏容器 */
@@ -186,6 +197,17 @@ const middleWidth = computed(() => {
   background: var(--panel);
   box-shadow: var(--shadow);
   border: 1px solid var(--stroke);
+  animation: column-breathe 6s ease-in-out infinite;
+}
+
+/* 栏位呼吸动画 - 非常 subtle */
+@keyframes column-breathe {
+  0%, 100% {
+    box-shadow: var(--shadow);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(100, 108, 255, 0.08);
+  }
 }
 
 /* 全屏时中栏样式 */

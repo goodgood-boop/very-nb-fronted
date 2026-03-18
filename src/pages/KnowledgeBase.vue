@@ -5,6 +5,10 @@
       subtitle="管理文档，AI 将基于知识库内容回答您的问题。"
     >
       <div class="row gap10">
+        <FullscreenButton 
+          v-model="isFullscreen"
+          @toggle="onFullscreenToggle"
+        />
         <button class="btn" @click="showUpload = true">
           <UploadIcon class="icon" /> 上传文档
         </button>
@@ -179,6 +183,7 @@ import Topbar from '../components/ui/Topbar.vue'
 import StatCard from '../components/ui/StatCard.vue'
 import Modal from '../components/ui/Modal.vue'
 import KnowledgeBaseUpload from './KnowledgeBaseUpload.vue'
+import FullscreenButton from '../components/home/FullscreenButton.vue'
 import { knowledgeBaseApi } from '../api/knowledgebase'
 import {
   UploadIcon,
@@ -194,6 +199,16 @@ import {
 } from 'lucide-vue-next'
 
 const router = useRouter()
+
+// ===== 新增：全屏相关 =====
+const emit = defineEmits(['fullscreen-change'])
+const isFullscreen = ref(false)
+
+const onFullscreenToggle = (value) => {
+  isFullscreen.value = value
+  emit('fullscreen-change', value)
+}
+// ===== 全屏相关结束 =====
 
 // 状态
 const loading = ref(false)

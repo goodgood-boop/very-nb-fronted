@@ -28,16 +28,20 @@
     <div v-else class="cards-container" :class="{ 'hovering-container': isContainerHovered }">
       <!-- 卡片1：开始面试 -->
       <div 
-        class="card"
+        ref="card0"
+        class="card card-3d card-interview"
         :class="{
           'expanded': hoveredCard === 0,
           'compressed': hoveredCard !== null && hoveredCard !== 0,
           'container-hovered': isContainerHovered
         }"
-        @mouseenter="hoveredCard = 0"
-        @mouseleave="hoveredCard = null"
+        :style="getCardStyle(0)"
+        @mouseenter="handleCardEnter(0, $event)"
+        @mouseleave="handleCardLeave(0)"
+        @mousemove="handleCardMove(0, $event)"
         @click="goToInterview"
       >
+        <div class="card-shine"></div>
         <div class="card-content">
           <div class="card-icon">🎯</div>
           <h3 class="card-title">开始面试</h3>
@@ -68,16 +72,20 @@
 
       <!-- 卡片2：问答助手 -->
       <div 
-        class="card"
+        ref="card1"
+        class="card card-3d card-qa"
         :class="{
           'expanded': hoveredCard === 1,
           'compressed': hoveredCard !== null && hoveredCard !== 1,
           'container-hovered': isContainerHovered
         }"
-        @mouseenter="hoveredCard = 1"
-        @mouseleave="hoveredCard = null"
+        :style="getCardStyle(1)"
+        @mouseenter="handleCardEnter(1, $event)"
+        @mouseleave="handleCardLeave(1)"
+        @mousemove="handleCardMove(1, $event)"
         @click="goToQA"
       >
+        <div class="card-shine"></div>
         <div class="card-content">
           <div class="card-icon">💬</div>
           <h3 class="card-title">问答助手</h3>
@@ -106,16 +114,20 @@
 
       <!-- 卡片3：简历库 -->
       <div 
-        class="card"
+        ref="card2"
+        class="card card-3d card-resume"
         :class="{
           'expanded': hoveredCard === 2,
           'compressed': hoveredCard !== null && hoveredCard !== 2,
           'container-hovered': isContainerHovered
         }"
-        @mouseenter="hoveredCard = 2"
-        @mouseleave="hoveredCard = null"
+        :style="getCardStyle(2)"
+        @mouseenter="handleCardEnter(2, $event)"
+        @mouseleave="handleCardLeave(2)"
+        @mousemove="handleCardMove(2, $event)"
         @click="goToResumes"
       >
+        <div class="card-shine"></div>
         <div class="card-content">
           <div class="card-icon">📄</div>
           <h3 class="card-title">简历库</h3>
@@ -160,6 +172,69 @@ const emit = defineEmits(['hover-change', 'fullscreen-change'])
 
 const router = useRouter()
 const route = useRoute()
+
+// ===== 3D倾斜效果 =====
+const card0 = ref(null)
+const card1 = ref(null)
+const card2 = ref(null)
+const cardRefs = [card0, card1, card2]
+
+// 存储每张卡片的旋转状态
+const cardRotations = ref([
+  { x: 0, y: 0, shineX: 50, shineY: 50 },
+  { x: 0, y: 0, shineX: 50, shineY: 50 },
+  { x: 0, y: 0, shineX: 50, shineY: 50 }
+])
+
+// 获取卡片的3D样式
+const getCardStyle = (index) => {
+  const rot = cardRotations.value[index]
+  return {
+    transform: `perspective(1000px) rotateX(${rot.x}deg) rotateY(${rot.y}deg) scale3d(1, 1, 1)`,
+    '--shine-x': `${rot.shineX}%`,
+    '--shine-y': `${rot.shineY}%`
+  }
+}
+
+// 处理鼠标进入卡片
+const handleCardEnter = (index, event) => {
+  hoveredCard.value = index
+}
+
+// 处理鼠标离开卡片
+const handleCardLeave = (index) => {
+  hoveredCard.value = null
+  // 重置旋转
+  cardRotations.value[index] = { x: 0, y: 0, shineX: 50, shineY: 50 }
+}
+
+// 处理鼠标在卡片上移动
+const handleCardMove = (index, event) => {
+  const card = cardRefs[index].value
+  if (!card) return
+  
+  const rect = card.getBoundingClientRect()
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  
+  const centerX = rect.width / 2
+  const centerY = rect.height / 2
+  
+  // 计算旋转角度（最大8度，更 subtle）
+  const rotateX = ((y - centerY) / centerY) * -8
+  const rotateY = ((x - centerX) / centerX) * 8
+  
+  // 计算光泽位置
+  const shineX = (x / rect.width) * 100
+  const shineY = (y / rect.height) * 100
+  
+  cardRotations.value[index] = {
+    x: rotateX,
+    y: rotateY,
+    shineX,
+    shineY
+  }
+}
 // 返回主页卡片视图
 const goBackToHome = () => {
   router.push('/app/home')
@@ -317,9 +392,39 @@ onMounted(() => {
   position: relative;
 }
 
+/* 3D卡片样式 */
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.1s ease-out, box-shadow 0.3s ease, border-color 0.3s ease;
+  will-change: transform;
+}
+
+/* 卡片光泽效果 */
+.card-shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    circle at var(--shine-x, 50%) var(--shine-y, 50%),
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(255, 255, 255, 0.05) 25%,
+    transparent 50%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.card-3d:hover .card-shine {
+  opacity: 1;
+}
+
 /* 卡片悬停效果 */
 .card:hover {
-  transform: translateY(-2px);
   box-shadow: var(--shadow-hover);
   border-color: var(--stroke2);
 }
@@ -327,15 +432,113 @@ onMounted(() => {
 /* 展开状态 */
 .card.expanded {
   flex: 1.5;
-  background: var(--panel);
-  border-color: var(--brand);
-  box-shadow: 0 12px 28px rgba(100, 108, 255, 0.15);
 }
 
 /* 压缩状态（其他卡片被压缩） */
 .card.compressed {
   flex: 0.7;
   opacity: 0.7;
+}
+
+/* ===== 渐变色彩卡片 ===== */
+
+/* 开始面试 - 蓝紫渐变 */
+.card-interview {
+  background: linear-gradient(135deg, 
+    rgba(20, 25, 35, 0.95) 0%, 
+    rgba(59, 130, 246, 0.35) 40%,
+    rgba(20, 25, 35, 0.95) 100%
+  );
+  border-color: rgba(59, 130, 246, 0.5);
+  animation: breathe-interview 4s ease-in-out infinite;
+}
+
+.card-interview:hover,
+.card-interview.expanded {
+  background: linear-gradient(135deg, 
+    rgba(20, 25, 35, 0.9) 0%, 
+    rgba(59, 130, 246, 0.5) 40%,
+    rgba(20, 25, 35, 0.9) 100%
+  );
+  border-color: rgba(59, 130, 246, 0.8);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.4);
+}
+
+@keyframes breathe-interview {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2), 0 0 0 1px rgba(59, 130, 246, 0.4);
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 12px 48px rgba(59, 130, 246, 0.4), 0 0 0 2px rgba(59, 130, 246, 0.6);
+    border-color: rgba(59, 130, 246, 0.7);
+  }
+}
+
+/* 问答助手 - 青绿渐变 */
+.card-qa {
+  background: linear-gradient(135deg, 
+    rgba(20, 25, 35, 0.95) 0%, 
+    rgba(13, 148, 136, 0.35) 40%,
+    rgba(20, 25, 35, 0.95) 100%
+  );
+  border-color: rgba(13, 148, 136, 0.5);
+  animation: breathe-qa 4s ease-in-out infinite;
+}
+
+.card-qa:hover,
+.card-qa.expanded {
+  background: linear-gradient(135deg, 
+    rgba(20, 25, 35, 0.9) 0%, 
+    rgba(13, 148, 136, 0.5) 40%,
+    rgba(20, 25, 35, 0.9) 100%
+  );
+  border-color: rgba(13, 148, 136, 0.8);
+  box-shadow: 0 8px 32px rgba(13, 148, 136, 0.4);
+}
+
+@keyframes breathe-qa {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(13, 148, 136, 0.2), 0 0 0 1px rgba(13, 148, 136, 0.4);
+    border-color: rgba(13, 148, 136, 0.5);
+  }
+  50% {
+    box-shadow: 0 12px 48px rgba(13, 148, 136, 0.4), 0 0 0 2px rgba(13, 148, 136, 0.6);
+    border-color: rgba(13, 148, 136, 0.7);
+  }
+}
+
+/* 简历库 - 粉紫渐变 */
+.card-resume {
+  background: linear-gradient(135deg, 
+    rgba(20, 25, 35, 0.95) 0%, 
+    rgba(139, 92, 246, 0.35) 40%,
+    rgba(20, 25, 35, 0.95) 100%
+  );
+  border-color: rgba(139, 92, 246, 0.5);
+  animation: breathe-resume 4s ease-in-out infinite;
+}
+
+.card-resume:hover,
+.card-resume.expanded {
+  background: linear-gradient(135deg, 
+    rgba(20, 25, 35, 0.9) 0%, 
+    rgba(139, 92, 246, 0.5) 40%,
+    rgba(20, 25, 35, 0.9) 100%
+  );
+  border-color: rgba(139, 92, 246, 0.8);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+}
+
+@keyframes breathe-resume {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2), 0 0 0 1px rgba(139, 92, 246, 0.4);
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 12px 48px rgba(139, 92, 246, 0.4), 0 0 0 2px rgba(139, 92, 246, 0.6);
+    border-color: rgba(139, 92, 246, 0.7);
+  }
 }
 
 /* 卡片内容 */

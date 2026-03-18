@@ -1,16 +1,14 @@
 <template>
   <div class="resume-list-page" :class="{ 'fullscreen-mode': isFullscreen }">
-    <!-- 右上角全屏按钮 -->
-    <div class="page-header-fullscreen">
-      <FullscreenButton 
-        v-model="isFullscreen"
-        @toggle="onFullscreenToggle"
-      />
-    </div>
     <!-- 头部 -->
     <div class="page-header">
-      <!-- 左侧留白，用来平衡布局 -->
-      <div class="header-left-placeholder"></div>
+      <!-- 左侧：全屏按钮 -->
+      <div class="header-left">
+        <FullscreenButton 
+          v-model="isFullscreen"
+          @toggle="onFullscreenToggle"
+        />
+      </div>
       
       <!-- 标题居中 -->
       <div class="header-title">
@@ -18,17 +16,71 @@
         <p class="page-subtitle">管理您已分析过的所有简历及面试记录</p>
       </div>
       
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          type="text"
-          v-model="searchTerm"
-          placeholder="搜索简历..."
-          class="search-input"
-        />
+      <div class="header-right">
+        <!-- 展开式上传按钮 -->
+        <div class="upload-expand-container" :class="{ expanded: showUploadPanel }">
+          <button 
+            class="upload-toggle-btn"
+            @click="toggleUploadPanel"
+            :class="{ active: showUploadPanel }"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17,8 12,3 7,8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span>上传简历</span>
+            <svg class="arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6,9 12,15 18,9"/>
+            </svg>
+          </button>
+          
+          <!-- 展开的上传面板 -->
+          <div v-if="showUploadPanel" class="upload-panel">
+            <div class="upload-area"
+                 @dragenter.prevent="dragOver = true"
+                 @dragleave.prevent="dragOver = false"
+                 @dragover.prevent
+                 @drop.prevent="handleDrop"
+                 @click="triggerFileInput"
+                 :class="{ 'drag-over': dragOver, 'uploading': uploading }">
+              <input 
+                ref="fileInput"
+                type="file" 
+                accept=".pdf,.doc,.docx"
+                @change="handleFileSelect"
+                style="display: none"
+              />
+              <div v-if="!uploading" class="upload-content">
+                <svg class="upload-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17,8 12,3 7,8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p class="upload-text">点击或拖拽文件到此处</p>
+                <p class="upload-hint">支持 PDF、DOC、DOCX 格式</p>
+              </div>
+              <div v-else class="upload-progress">
+                <div class="progress-spinner"></div>
+                <p class="progress-text">{{ uploadProgress }}%</p>
+                <p class="progress-hint">正在上传...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            v-model="searchTerm"
+            placeholder="搜索简历..."
+            class="search-input"
+          />
+        </div>
       </div>
     </div>
 
@@ -43,7 +95,7 @@
       <div class="empty-icon">📄</div>
       <h3>暂无简历记录</h3>
       <p>上传简历开始您的第一次 AI 面试分析</p>
-      <button class="btn primary" @click="router.push('/app/interview')">
+      <button class="btn primary" @click="toggleUploadPanel">
         上传简历
       </button>
     </div>
@@ -187,6 +239,84 @@ const deletingId = ref(null)
 const showDeleteModal = ref(false)
 const deleteTarget = ref(null)
 
+// ===== 新增：上传面板相关 =====
+const showUploadPanel = ref(false)
+const dragOver = ref(false)
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const fileInput = ref(null)
+
+const toggleUploadPanel = () => {
+  showUploadPanel.value = !showUploadPanel.value
+}
+
+const triggerFileInput = () => {
+  if (!uploading.value) {
+    fileInput.value?.click()
+  }
+}
+
+const handleFileSelect = (e) => {
+  const file = e.target.files[0]
+  if (file) {
+    uploadFile(file)
+  }
+}
+
+const handleDrop = (e) => {
+  dragOver.value = false
+  const file = e.dataTransfer.files[0]
+  if (file) {
+    uploadFile(file)
+  }
+}
+
+const uploadFile = async (file) => {
+  // 验证文件类型
+  const validExtensions = ['.pdf', '.doc', '.docx']
+  const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
+  
+  if (!validExtensions.includes(fileExtension)) {
+    alert('不支持的文件格式，请上传 PDF、DOC 或 DOCX 文件')
+    return
+  }
+  
+  // 验证文件大小 (10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    alert('文件大小超过 10MB 限制')
+    return
+  }
+  
+  uploading.value = true
+  uploadProgress.value = 0
+  
+  // 模拟上传进度
+  const progressInterval = setInterval(() => {
+    if (uploadProgress.value < 90) {
+      uploadProgress.value += Math.random() * 15
+    }
+  }, 200)
+  
+  try {
+    const result = await resumeApi.uploadResume(file)
+    clearInterval(progressInterval)
+    uploadProgress.value = 100
+    
+    // 上传完成后刷新列表
+    setTimeout(() => {
+      uploading.value = false
+      showUploadPanel.value = false
+      loadResumes()
+    }, 500)
+  } catch (err) {
+    clearInterval(progressInterval)
+    uploading.value = false
+    console.error('上传失败', err)
+    alert('上传失败，请稍后重试')
+  }
+}
+// ===== 上传面板相关结束 =====
+
 // 过滤后的简历列表
 const filteredResumes = computed(() => {
   if (!searchTerm.value) return resumes.value
@@ -301,6 +431,153 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ===== 展开式上传面板 ===== */
+.upload-expand-container {
+  position: relative;
+}
+
+.upload-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-toggle-btn:hover {
+  background: var(--panel-hover);
+  border-color: var(--brand);
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.15);
+}
+
+.upload-toggle-btn.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+}
+
+.upload-toggle-btn .arrow {
+  transition: transform 0.3s ease;
+}
+
+.upload-toggle-btn.active .arrow {
+  transform: rotate(180deg);
+}
+
+.upload-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  z-index: 100;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.upload-area {
+  border: 2px dashed var(--stroke);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--bg0);
+}
+
+.upload-area:hover,
+.upload-area.drag-over {
+  border-color: var(--brand);
+  background: rgba(100, 108, 255, 0.05);
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-icon {
+  color: var(--brand);
+  margin-bottom: 8px;
+}
+
+.upload-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--stroke);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.progress-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--brand);
+  margin: 0;
+}
+
+.progress-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
 }
 
 .btn-back {

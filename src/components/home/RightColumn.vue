@@ -40,48 +40,25 @@
               </div>
             </div>
 
-            <!-- 展开状态：完整日历（占比30%） -->
+            <!-- 展开状态：近两周打卡记录 -->
             <div v-else class="checkin-expanded">
               <div class="calendar-header">
-                <button class="month-nav" @click="prevMonth">‹</button>
-                <h4>📅 {{ displayMonth }}</h4>
-                <button class="month-nav" @click="nextMonth">›</button>
+                <h4>📅 近两周打卡</h4>
               </div>
               <div class="calendar-grid">
                 <div class="weekdays">
                   <span v-for="day in weekdays" :key="day">{{ day }}</span>
                 </div>
-                <div class="days-grid">
-                  <!-- 上月日期 -->
+                <div class="days-grid two-weeks">
+                  <!-- 近两周日期 -->
                   <div 
-                    v-for="(day, index) in prevMonthDays" 
-                    :key="'prev-' + index"
-                    class="calendar-day other-month"
-                    :class="{
-                      'checked': day.checked
-                    }"
-                  >
-                    {{ day.date }}
-                  </div>
-                  <!-- 当月日期 -->
-                  <div 
-                    v-for="(day, index) in currentMonthDays" 
-                    :key="'curr-' + index"
+                    v-for="(day, index) in recentTwoWeeksDays" 
+                    :key="'recent-' + index"
                     class="calendar-day"
                     :class="{
                       'checked': day.checked,
-                      'today': day.isToday
-                    }"
-                  >
-                    {{ day.date }}
-                  </div>
-                  <!-- 下月日期 -->
-                  <div 
-                    v-for="(day, index) in nextMonthDays" 
-                    :key="'next-' + index"
-                    class="calendar-day other-month"
-                    :class="{
-                      'checked': day.checked
+                      'today': day.isToday,
+                      'future': day.isFuture
                     }"
                   >
                     {{ day.date }}
@@ -90,8 +67,8 @@
               </div>
               <div class="calendar-stats">
                 <div class="stat-item">
-                  <span class="stat-label">本月</span>
-                  <span class="stat-value">{{ monthCheckins }}天</span>
+                  <span class="stat-label">本周</span>
+                  <span class="stat-value">{{ weekCheckins }}天</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">连续</span>
@@ -604,85 +581,40 @@ const logout = () => {
 const checkinStats = ref({ streak: 0, total: 0, days: [] })
 const weekdays = ['一', '二', '三', '四', '五', '六', '日']
 
-// 当前显示的月份（用于日历切换）
-const displayDate = ref(dayjs())
-const displayMonth = computed(() => displayDate.value.format('YYYY年MM月'))
-
-// 月份切换
-const prevMonth = () => {
-  displayDate.value = displayDate.value.subtract(1, 'month')
-}
-
-const nextMonth = () => {
-  displayDate.value = displayDate.value.add(1, 'month')
-}
-
-// 上月日期（用于填充日历开头）
-const prevMonthDays = computed(() => {
-  const startOfMonth = displayDate.value.startOf('month')
-  const startDay = startOfMonth.day()
-  const startOffset = startDay === 0 ? 6 : startDay - 1
-  
-  if (startOffset === 0) return []
-  
-  const prevMonth = displayDate.value.subtract(1, 'month')
-  const daysInPrevMonth = prevMonth.daysInMonth()
+// 近两周日期（14天，从上周一开始）
+const recentTwoWeeksDays = computed(() => {
   const days = []
+  const today = dayjs()
+  const todayStr = today.format('YYYY-MM-DD')
   
-  for (let i = daysInPrevMonth - startOffset + 1; i <= daysInPrevMonth; i++) {
-    const dateStr = prevMonth.date(i).format('YYYY-MM-DD')
+  // 从上周一开始（今天往前推最多13天，找到最近的周一）
+  const startOfThisWeek = today.startOf('week').add(1, 'day') // 本周一
+  const startDate = startOfThisWeek.subtract(7, 'day') // 上周一
+  
+  for (let i = 0; i < 14; i++) {
+    const currentDate = startDate.add(i, 'day')
+    const dateStr = currentDate.format('YYYY-MM-DD')
     days.push({
-      date: i,
-      checked: checkinStats.value.days?.includes(dateStr) || false
-    })
-  }
-  
-  return days
-})
-
-// 当月日期
-const currentMonthDays = computed(() => {
-  const daysInMonth = displayDate.value.daysInMonth()
-  const days = []
-  const today = dayjs().format('YYYY-MM-DD')
-  
-  for (let i = 1; i <= daysInMonth; i++) {
-    const dateStr = displayDate.value.date(i).format('YYYY-MM-DD')
-    days.push({
-      date: i,
+      date: currentDate.date(),
       checked: checkinStats.value.days?.includes(dateStr) || false,
-      isToday: dateStr === today
+      isToday: dateStr === todayStr,
+      isFuture: currentDate.isAfter(today, 'day')
     })
   }
   
   return days
 })
 
-// 下月日期（用于填充日历结尾）
-const nextMonthDays = computed(() => {
-  const totalDays = prevMonthDays.value.length + currentMonthDays.value.length
-  const remainingCells = 42 - totalDays // 6行 x 7列 = 42格
+// 本周打卡天数
+const weekCheckins = computed(() => {
+  const today = dayjs()
+  const startOfWeek = today.startOf('week').add(1, 'day') // 本周一
+  const endOfWeek = startOfWeek.add(6, 'day') // 本周日
   
-  if (remainingCells <= 0) return []
-  
-  const nextMonth = displayDate.value.add(1, 'month')
-  const days = []
-  
-  for (let i = 1; i <= remainingCells; i++) {
-    const dateStr = nextMonth.date(i).format('YYYY-MM-DD')
-    days.push({
-      date: i,
-      checked: checkinStats.value.days?.includes(dateStr) || false
-    })
-  }
-  
-  return days
-})
-
-const monthCheckins = computed(() => {
-  return checkinStats.value.days?.filter(d => 
-    d.startsWith(displayDate.value.format('YYYY-MM'))
-  ).length || 0
+  return checkinStats.value.days?.filter(d => {
+    const date = dayjs(d)
+    return date.isAfter(startOfWeek.subtract(1, 'day')) && date.isBefore(endOfWeek.add(1, 'day'))
+  }).length || 0
 })
 
 const circumference = 2 * Math.PI * 40
@@ -1132,10 +1064,12 @@ onUnmounted(() => {
 /* ===== 打卡部分 - 展开状态 ===== */
 .checkin-expanded {
   height: 100%;
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  background: linear-gradient(180deg, var(--panel) 0%, rgba(100, 108, 255, 0.05) 100%);
+  border-radius: 16px;
 }
 
 .calendar-header {
@@ -1143,34 +1077,46 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
+  padding: 0 4px;
 }
 
 .calendar-header h4 {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .month-nav {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--panel);
   border: 1px solid var(--stroke);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .month-nav:hover {
-  background: var(--panel2);
-  color: var(--text);
+  background: var(--brand);
+  color: white;
   border-color: var(--brand);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.3);
+}
+
+.month-nav:active {
+  transform: scale(0.95);
 }
 
 .calendar-month {
@@ -1182,7 +1128,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   min-height: 0;
 }
 
@@ -1190,38 +1136,90 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
-  font-size: 10px;
-  color: var(--muted2);
-  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
   flex-shrink: 0;
+  padding: 8px 0;
+  background: rgba(100, 108, 255, 0.08);
+  border-radius: 10px;
 }
 
 .days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
+  gap: 4px;
   flex: 1;
+  padding: 4px;
+}
+
+.days-grid.two-weeks {
+  grid-template-rows: repeat(2, 1fr);
 }
 
 .calendar-day {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  border-radius: 3px;
-  background: var(--panel);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 10px;
+  background: rgba(30, 35, 48, 0.5);
   color: var(--text);
-  min-height: 20px;
+  min-height: 32px;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+}
+
+.calendar-day:hover:not(.empty) {
+  background: rgba(100, 108, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .calendar-day.checked {
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand) 0%, rgba(100, 108, 255, 0.8) 100%);
   color: white;
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.4);
+  animation: pulse-check 2s ease-in-out infinite;
+}
+
+@keyframes pulse-check {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(100, 108, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 6px 20px rgba(100, 108, 255, 0.6);
+  }
+}
+
+.calendar-day.checked::after {
+  content: '✓';
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 8px;
+  opacity: 0.8;
 }
 
 .calendar-day.today {
-  border: 1px solid var(--brand);
-  font-weight: 600;
+  border: 2px solid var(--brand);
+  font-weight: 700;
+  background: rgba(100, 108, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
+}
+
+.calendar-day.today::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  background: var(--ok);
+  border-radius: 50%;
 }
 
 .calendar-day.empty {
@@ -1230,32 +1228,67 @@ onUnmounted(() => {
 
 .calendar-day.other-month {
   color: var(--muted2);
-  background: var(--panel);
-  opacity: 0.6;
+  opacity: 0.4;
+  background: rgba(30, 35, 48, 0.2);
+}
+
+.calendar-day.other-month.checked {
+  opacity: 0.7;
+  background: linear-gradient(135deg, rgba(100, 108, 255, 0.5) 0%, rgba(100, 108, 255, 0.3) 100%);
+}
+
+.calendar-day.future {
+  opacity: 0.3;
+  background: transparent;
+  cursor: default;
+}
+
+.calendar-day.future:hover {
+  transform: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .calendar-stats {
   display: flex;
   justify-content: space-around;
-  padding-top: 6px;
-  border-top: 1px solid var(--stroke);
+  padding: 12px 8px;
+  background: rgba(100, 108, 255, 0.08);
+  border-radius: 12px;
   flex-shrink: 0;
+  gap: 8px;
 }
 
 .stat-item {
   text-align: center;
+  flex: 1;
+  padding: 8px 4px;
+  background: var(--panel);
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand);
+  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.2);
 }
 
 .stat-label {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
+  margin-bottom: 4px;
 }
 
 .stat-value {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text) 0%, var(--brand) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* ===== 收缩状态：天气 + 温馨提醒 ===== */

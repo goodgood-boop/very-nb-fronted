@@ -41,9 +41,9 @@ const toggleFullscreen = () => {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  border: 1px solid #eef2f6;
-  background: white;
-  color: #64748b;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -53,19 +53,20 @@ const toggleFullscreen = () => {
 }
 
 .fullscreen-btn:hover {
-  background: #f8fafc;
-  color: #3b82f6;
+  background: var(--panel-hover);
+  color: var(--brand);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--brand);
 }
 
 .fullscreen-btn.is-fullscreen {
-  background: #3b82f6;
+  background: var(--brand);
   color: white;
-  border-color: #3b82f6;
+  border-color: var(--brand);
 }
 
 .fullscreen-btn.is-fullscreen:hover {
-  background: #2563eb;
+  background: var(--brand-hover);
 }
 </style>

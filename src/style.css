@@ -6,6 +6,7 @@
   --bg0: #0A0C14;
   --bg1: #1A1E2C;
   --panel: rgba(30, 35, 48, 0.7);
+  --panel-hover: rgba(40, 45, 60, 0.8);
   --panel2: rgba(30, 35, 48, 0.5);
   --stroke: rgba(100, 108, 255, 0.2);
   --stroke2: rgba(100, 108, 255, 0.12);
@@ -39,6 +40,7 @@ body.theme-warm {
   --bg0: #110F0B;
   --bg1: #1E1B16;
   --panel: rgba(20, 18, 15, 0.7);
+  --panel-hover: rgba(35, 32, 28, 0.8);
   --panel2: rgba(20, 18, 15, 0.5);
   --stroke: rgba(200, 169, 110, 0.2);
   --stroke2: rgba(200, 169, 110, 0.12);
@@ -65,6 +67,7 @@ body.theme-ocean {
   --bg0: #0A1A2F;
   --bg1: #1E3A5F;
   --panel: rgba(13, 148, 136, 0.15);
+  --panel-hover: rgba(20, 180, 160, 0.25);
   --panel2: rgba(13, 148, 136, 0.1);
   --stroke: rgba(107, 33, 165, 0.3);
   --stroke2: rgba(107, 33, 165, 0.2);
