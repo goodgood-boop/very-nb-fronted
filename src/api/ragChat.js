@@ -44,7 +44,10 @@ export const ragChatApi = {
   async createSession(knowledgeBaseIds, title) {
     const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
       body: JSON.stringify({ knowledgeBaseIds, title }),
     });
     return handleResponse(response);
@@ -56,7 +59,11 @@ export const ragChatApi = {
    * @returns {Promise<RagChatSessionListItem[]>}
    */
   async listSessions() {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions`);
+    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -67,7 +74,11 @@ export const ragChatApi = {
    * @returns {Promise<RagChatSessionDetail>}
    */
   async getSessionDetail(sessionId) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}`);
+    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -81,7 +92,10 @@ export const ragChatApi = {
   async updateSessionTitle(sessionId, title) {
     const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/title`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
       body: JSON.stringify({ title }),
     });
     return handleResponse(response);
@@ -97,7 +111,10 @@ export const ragChatApi = {
   async updateKnowledgeBases(sessionId, knowledgeBaseIds) {
     const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/knowledge-bases`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
       body: JSON.stringify({ knowledgeBaseIds }),
     });
     return handleResponse(response);
@@ -112,6 +129,9 @@ export const ragChatApi = {
   async togglePin(sessionId) {
     const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/pin`, {
       method: 'PUT',
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
     });
     return handleResponse(response);
   },
@@ -125,6 +145,9 @@ export const ragChatApi = {
   async deleteSession(sessionId) {
     const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}`, {
       method: 'DELETE',
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
     });
     return handleResponse(response);
   },
@@ -139,7 +162,10 @@ export const ragChatApi = {
   async sendMessage(sessionId, question) {
     const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
       body: JSON.stringify({ question }),
     });
     return handleResponse(response);
@@ -161,7 +187,10 @@ export const ragChatApi = {
         `${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/messages/stream`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Id': '1' // 默认用户ID
+          },
           body: JSON.stringify({ question }),
         }
       );

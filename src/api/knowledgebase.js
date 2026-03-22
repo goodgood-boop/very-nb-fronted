@@ -63,6 +63,9 @@ export const knowledgeBaseApi = {
     const response = await fetch(`${API_BASE_URL}/api/knowledgebase/upload`, {
       method: 'POST',
       body: formData,
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
     });
     return handleResponse(response);
   },
@@ -97,7 +100,11 @@ export const knowledgeBaseApi = {
       params.append('vectorStatus', vectorStatus);
     }
     const queryString = params.toString();
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/list${queryString ? `?${queryString}` : ''}`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/list${queryString ? `?${queryString}` : ''}`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -108,7 +115,11 @@ export const knowledgeBaseApi = {
    * @returns {Promise<KnowledgeBaseItem>}
    */
   async getKnowledgeBase(id) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -121,6 +132,9 @@ export const knowledgeBaseApi = {
   async deleteKnowledgeBase(id) {
     const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}`, {
       method: 'DELETE',
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
     });
     return handleResponse(response);
   },
@@ -133,7 +147,11 @@ export const knowledgeBaseApi = {
    * @returns {Promise<string[]>}
    */
   async getAllCategories() {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/categories`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/categories`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -144,7 +162,11 @@ export const knowledgeBaseApi = {
    * @returns {Promise<KnowledgeBaseItem[]>}
    */
   async getByCategory(category) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/category/${encodeURIComponent(category)}`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/category/${encodeURIComponent(category)}`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -154,7 +176,11 @@ export const knowledgeBaseApi = {
    * @returns {Promise<KnowledgeBaseItem[]>}
    */
   async getUncategorized() {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/uncategorized`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/uncategorized`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -168,7 +194,10 @@ export const knowledgeBaseApi = {
   async updateCategory(id, category) {
     const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}/category`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
       body: JSON.stringify({ category }),
     });
     return handleResponse(response);
@@ -183,7 +212,11 @@ export const knowledgeBaseApi = {
    * @returns {Promise<KnowledgeBaseItem[]>}
    */
   async search(keyword) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/search?keyword=${encodeURIComponent(keyword)}`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/search?keyword=${encodeURIComponent(keyword)}`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -195,7 +228,11 @@ export const knowledgeBaseApi = {
    * @returns {Promise<KnowledgeBaseStats>}
    */
   async getStatistics() {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/stats`);
+    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/stats`, {
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
+    });
     return handleResponse(response);
   },
 
@@ -210,6 +247,9 @@ export const knowledgeBaseApi = {
   async revectorize(id) {
     const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}/revectorize`, {
       method: 'POST',
+      headers: {
+        'X-User-Id': '1' // 默认用户ID
+      }
     });
     return handleResponse(response);
   },
@@ -223,7 +263,10 @@ export const knowledgeBaseApi = {
   async queryKnowledgeBase(req) {
     const response = await fetch(`${API_BASE_URL}/api/knowledgebase/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
       body: JSON.stringify(req),
     });
     return handleResponse(response);
@@ -241,10 +284,13 @@ export const knowledgeBaseApi = {
   async queryKnowledgeBaseStream(req, onMessage, onComplete, onError) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/knowledgebase/query/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req),
-      });
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': '1' // 默认用户ID
+      },
+      body: JSON.stringify(req),
+    });
 
       if (!response.ok) {
         let errorMessage = `请求失败 (${response.status})`;

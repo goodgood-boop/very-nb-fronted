@@ -7,6 +7,9 @@ import AppLayout from '../layouts/AppLayout.vue'
 
 import InterviewRoom from '../pages/InterviewRoom.vue'
 import InterviewHistory from '../pages/InterviewHistory.vue'
+import ResumeSelect from '../pages/interview/ResumeSelect.vue'
+import KnowledgeBaseSelect from '../pages/interview/KnowledgeBaseSelect.vue'
+import InterviewSettings from '../pages/interview/InterviewSettings.vue'
 import ResumeUpload from '../pages/ResumeUpload.vue'
 import ResumeAnalysis from '../pages/ResumeAnalysis.vue'
 import ResumeList from '../pages/ResumeList.vue'
@@ -39,6 +42,26 @@ const router = createRouter({
   children: [
     {
       path: 'interview',
+      component: InterviewRoom,
+      meta: { title: '面试房间' }
+    },
+    {
+      path: 'interview/select-resume',
+      component: ResumeSelect,
+      meta: { title: '选择简历' }
+    },
+    {
+      path: 'interview/settings',
+      component: InterviewSettings,
+      meta: { title: '面试设置' }
+    },
+    {
+      path: 'interview/knowledgebase-select',
+      component: KnowledgeBaseSelect,
+      meta: { title: '选择知识库' }
+    },
+    {
+      path: 'interview/room',
       component: InterviewRoom,
       meta: { title: '面试房间' }
     },

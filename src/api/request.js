@@ -13,7 +13,8 @@ const instance = axios.create({
   baseURL,
   timeout: 60000,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-User-Id': '1' // 默认用户ID
   }
 })
 

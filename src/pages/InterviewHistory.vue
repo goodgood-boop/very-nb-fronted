@@ -292,6 +292,58 @@
                     </div>
                   </div>
 
+                  <!-- 面试信息卡片 -->
+                  <div class="detail-info-card">
+                    <div class="detail-info-header">
+                      <h4>面试信息</h4>
+                    </div>
+                    <div class="detail-info-content">
+                      <div class="detail-info-item">
+                        <span class="detail-info-label">面试岗位：</span>
+                        <span class="detail-info-value">{{ getJobTypeText(currentInterview.jobId) }}</span>
+                      </div>
+                      <div class="detail-info-item">
+                        <span class="detail-info-label">总题数：</span>
+                        <span class="detail-info-value">{{ currentInterview.totalQuestions || 0 }} 题</span>
+                      </div>
+                      <div class="detail-info-item">
+                        <span class="detail-info-label">创建时间：</span>
+                        <span class="detail-info-value">{{ formatDate(currentInterview.createdAt) }}</span>
+                      </div>
+                      <div class="detail-info-item" v-if="currentInterview.completedAt">
+                        <span class="detail-info-label">完成时间：</span>
+                        <span class="detail-info-value">{{ formatDate(currentInterview.completedAt) }}</span>
+                      </div>
+                      <div class="detail-info-item">
+                        <span class="detail-info-label">评估状态：</span>
+                        <span class="detail-info-value" :class="getEvaluateStatusClass(currentInterview.evaluateStatus)">
+                          {{ getEvaluateStatusText(currentInterview.evaluateStatus) }}
+                        </span>
+                      </div>
+                      <div class="detail-info-item" v-if="currentInterview.evaluateError">
+                        <span class="detail-info-label">评估错误：</span>
+                        <span class="detail-info-value error">{{ currentInterview.evaluateError }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 多维度评分 -->
+                <div v-if="currentInterview.categoryScores && currentInterview.categoryScores.length > 0" class="detail-dimensions-card">
+                  <div class="detail-dimensions-header">
+                    <h4>多维度评分</h4>
+                  </div>
+                  <div class="detail-dimensions-list">
+                    <div v-for="(category, index) in currentInterview.categoryScores" :key="index" class="detail-dimension-item">
+                      <div class="detail-dimension-header">
+                        <span class="detail-dimension-name">{{ category.category }}</span>
+                        <span class="detail-dimension-score">{{ category.score }}分</span>
+                      </div>
+                      <div class="detail-dimension-bar">
+                        <div class="detail-dimension-fill" :style="{ width: category.score + '%', backgroundColor: getScoreColor(category.score) }"></div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- 优势和改进建议 -->
@@ -318,6 +370,20 @@
                       <li v-for="(improvement, i) in currentInterview.improvements" :key="i">
                         <span class="detail-list-dot warning"></span>
                         <span>{{ improvement }}</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <!-- 学习计划 -->
+                  <div v-if="currentInterview.learningPlan && currentInterview.learningPlan.length > 0" class="detail-section-card">
+                    <div class="detail-section-header info">
+                      <BookOpen width="18" height="18" />
+                      <h4>学习计划</h4>
+                    </div>
+                    <ul class="detail-section-list">
+                      <li v-for="(plan, i) in currentInterview.learningPlan" :key="i">
+                        <span class="detail-list-dot info"></span>
+                        <span>{{ plan }}</span>
                       </li>
                     </ul>
                   </div>
@@ -533,41 +599,37 @@ function isEvaluateFailed(interview) {
   return interview.evaluateStatus === 'FAILED'
 }
 
-// 加载数据 - 从简历详情中获取面试记录
+// 加载数据 - 通过获取所有简历来汇总面试记录（与 EchoMind 前端保持一致）
 const loadData = async () => {
   try {
     loading.value = true
     
-    // 1. 获取所有简历列表
+    // 获取所有简历
     const resumes = await resumeApi.getResumes()
     const allInterviews = []
     
-    // 2. 对每个简历获取详情，提取面试记录
+    // 遍历每个简历，获取其面试记录
     for (const resume of resumes) {
-      try {
-        const detail = await resumeApi.getResumeDetail(resume.id)
-        if (detail.interviews && detail.interviews.length > 0) {
-          detail.interviews.forEach(interview => {
-            allInterviews.push({
-              ...interview,
-              resumeId: resume.id,
-              resumeFilename: resume.filename
-            })
+      const detail = await resumeApi.getResumeDetail(resume.id)
+      if (detail.interviews && detail.interviews.length > 0) {
+        detail.interviews.forEach(interview => {
+          allInterviews.push({
+            ...interview,
+            resumeId: resume.id,
+            resumeFilename: resume.filename
           })
-        }
-      } catch (e) {
-        console.warn(`获取简历 ${resume.id} 详情失败`, e)
+        })
       }
     }
     
-    // 3. 按创建时间倒序排序
-    allInterviews.sort((a, b) => {
+    // 按创建时间倒序排序
+    const sortedInterviews = allInterviews.sort((a, b) => {
       const timeA = new Date(a.createdAt || a.startTime || 0).getTime()
       const timeB = new Date(b.createdAt || b.startTime || 0).getTime()
       return timeB - timeA
     })
     
-    interviews.value = allInterviews
+    interviews.value = sortedInterviews
   } catch (err) {
     console.error('加载面试历史失败', err)
   } finally {
@@ -601,12 +663,15 @@ const viewInterview = async (interview) => {
   expandedQuestions.value = new Set()
   
   try {
+    // 获取面试详情（已包含所有报告数据）
     const detail = await interviewApi.getInterviewDetail(interview.sessionId)
+    console.log('面试详情数据:', detail)
+    
     currentInterview.value = detail
     
     // 默认展开所有问题
-    if (detail.answers) {
-      expandedQuestions.value = new Set(detail.answers.map((_, idx) => idx))
+    if (currentInterview.value.answers) {
+      expandedQuestions.value = new Set(currentInterview.value.answers.map((_, idx) => idx))
     }
   } catch (err) {
     console.error('加载面试详情失败:', err)
@@ -705,7 +770,7 @@ const handleDelete = async () => {
 
 // 返回
 const goBack = () => {
-  router.back()
+  router.push('/app/home')
 }
 
 // 格式化日期
@@ -747,6 +812,38 @@ const getScoreClass = (score) => {
   if (score >= 80) return 'high'
   if (score >= 60) return 'medium'
   return 'low'
+}
+
+// 获取岗位类型文本
+const getJobTypeText = (jobId) => {
+  const jobTypes = {
+    1: '后端开发',
+    2: '前端开发',
+    3: '测试工程师'
+  }
+  return jobTypes[jobId] || '未知岗位'
+}
+
+// 获取评估状态文本
+const getEvaluateStatusText = (status) => {
+  const statusMap = {
+    'PENDING': '待评估',
+    'PROCESSING': '评估中',
+    'COMPLETED': '评估完成',
+    'FAILED': '评估失败'
+  }
+  return statusMap[status] || '未知状态'
+}
+
+// 获取评估状态样式类
+const getEvaluateStatusClass = (status) => {
+  const classMap = {
+    'PENDING': 'pending',
+    'PROCESSING': 'processing',
+    'COMPLETED': 'completed',
+    'FAILED': 'failed'
+  }
+  return classMap[status] || ''
 }
 
 onMounted(() => {
@@ -1604,6 +1701,14 @@ watch(() => route.path, (newPath, oldPath) => {
   color: #d97706;
 }
 
+.detail-section-header.info {
+  color: #2563eb;
+}
+
+.detail-section-header.info h4 {
+  color: #2563eb;
+}
+
 .detail-section-list {
   list-style: none;
   padding: 0;
@@ -1636,6 +1741,10 @@ watch(() => route.path, (newPath, oldPath) => {
 
 .detail-list-dot.warning {
   background: #f59e0b;
+}
+
+.detail-list-dot.info {
+  background: #3b82f6;
 }
 
 .detail-questions-section {
@@ -1746,6 +1855,89 @@ watch(() => route.path, (newPath, oldPath) => {
 .detail-question-score.low {
   background: #fef2f2;
   color: #dc2626;
+}
+
+/* 面试信息卡片样式 */
+.detail-info-card {
+  background: #f9fafb;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.detail-info-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-info-header h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.detail-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail-info-label {
+  width: 80px;
+  font-weight: 500;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.detail-info-value {
+  flex: 1;
+  color: #4b5563;
+}
+
+.detail-info-value.error {
+  color: #ef4444;
+  background: #fef2f2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+/* 评估状态样式 */
+.detail-info-value.pending {
+  color: #f59e0b;
+  background: #fef3c7;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.detail-info-value.processing {
+  color: #3b82f6;
+  background: #eff6ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.detail-info-value.completed {
+  color: #16a34a;
+  background: #f0fdf4;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.detail-info-value.failed {
+  color: #dc2626;
+  background: #fef2f2;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .detail-expand-icon {

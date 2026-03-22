@@ -2,12 +2,9 @@
   <div class="resume-list-page" :class="{ 'fullscreen-mode': isFullscreen }">
     <!-- 头部 -->
     <div class="page-header">
-      <!-- 左侧：全屏按钮 -->
+      <!-- 左侧：占位符，保持布局平衡 -->
       <div class="header-left">
-        <FullscreenButton 
-          v-model="isFullscreen"
-          @toggle="onFullscreenToggle"
-        />
+        <div class="header-left-placeholder"></div>
       </div>
       
       <!-- 标题居中 -->
@@ -81,6 +78,12 @@
             class="search-input"
           />
         </div>
+        
+        <!-- 右侧：全屏按钮 -->
+        <FullscreenButton 
+          v-model="isFullscreen"
+          @toggle="onFullscreenToggle"
+        />
       </div>
     </div>
 
@@ -178,6 +181,17 @@
       </table>
     </div>
 
+    <!-- 简历详情弹窗 -->
+    <ResumeDetailModal
+      v-for="modal in resumeModals"
+      :key="modal.id"
+      :resume-id="modal.resumeId"
+      :initial-position="modal.position"
+      :z-index="modal.zIndex"
+      @close="closeResumeModal(modal.id)"
+      @focus="bringToFront(modal.id)"
+    />
+
     <!-- 删除确认对话框 -->
     <Teleport to="body">
       <Transition name="fade">
@@ -220,8 +234,67 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { resumeApi } from '../api/resume.js'
-import FullscreenButton from '../components/home/FullscreenButton.vue'  // 导入全屏按钮
+import FullscreenButton from '../components/home/FullscreenButton.vue'
+import ResumeDetailModal from '../components/resume/ResumeDetailModal.vue'
+
 const router = useRouter()
+
+// ===== 简历弹窗管理 =====
+const resumeModals = ref([])
+let modalIdCounter = 0
+const baseZIndex = 1000
+
+// 计算新弹窗位置
+const calculateModalPosition = () => {
+  const offset = resumeModals.value.length * 30
+  const maxOffset = 200
+  const finalOffset = Math.min(offset, maxOffset)
+  return {
+    x: 100 + finalOffset,
+    y: 50 + finalOffset
+  }
+}
+
+// 打开简历弹窗
+const openResumeModal = (resumeId) => {
+  // 检查是否已打开
+  const existingModal = resumeModals.value.find(m => m.resumeId === resumeId)
+  if (existingModal) {
+    bringToFront(existingModal.id)
+    return
+  }
+  
+  const id = ++modalIdCounter
+  const position = calculateModalPosition()
+  const maxZ = resumeModals.value.length > 0 
+    ? Math.max(...resumeModals.value.map(m => m.zIndex)) 
+    : baseZIndex
+  
+  resumeModals.value.push({
+    id,
+    resumeId,
+    position,
+    zIndex: maxZ + 1
+  })
+}
+
+// 关闭简历弹窗
+const closeResumeModal = (id) => {
+  const index = resumeModals.value.findIndex(m => m.id === id)
+  if (index > -1) {
+    resumeModals.value.splice(index, 1)
+  }
+}
+
+// 置顶弹窗
+const bringToFront = (id) => {
+  const modal = resumeModals.value.find(m => m.id === id)
+  if (modal) {
+    const maxZ = Math.max(...resumeModals.value.map(m => m.zIndex))
+    modal.zIndex = maxZ + 1
+  }
+}
+// ===== 弹窗管理结束 =====
 // ===== 新增：全屏相关 =====
 const emit = defineEmits(['fullscreen-change'])
 const isFullscreen = ref(false)
@@ -298,15 +371,19 @@ const uploadFile = async (file) => {
   }, 200)
   
   try {
-    const result = await resumeApi.uploadResume(file)
+    const result = await resumeApi.uploadAndAnalyze(file)
     clearInterval(progressInterval)
     uploadProgress.value = 100
     
-    // 上传完成后刷新列表
+    // 上传完成后刷新列表并打开详情弹窗
     setTimeout(() => {
       uploading.value = false
       showUploadPanel.value = false
       loadResumes()
+      // 打开新上传简历的详情弹窗
+      if (result && result.id) {
+        openResumeModal(result.id)
+      }
     }, 500)
   } catch (err) {
     clearInterval(progressInterval)
@@ -339,7 +416,7 @@ const loadResumes = async () => {
 
 // 查看简历详情
 const viewResumeDetail = (id) => {
-  router.push(`/app/resume-analysis/${id}`)
+  openResumeModal(id)
 }
 
 // 确认删除

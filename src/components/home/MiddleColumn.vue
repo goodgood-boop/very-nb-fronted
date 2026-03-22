@@ -296,7 +296,10 @@ const saveClickPosition = (event) => {
 // 导航函数
 const goToInterview = (event) => {
   saveClickPosition(event)
-  router.push('/app/home/interview')
+  // 清除之前的面试设置，开始新的面试流程
+  localStorage.removeItem('selectedResume')
+  localStorage.removeItem('interviewSettings')
+  router.push('/app/home/interview/select-resume')
 }
 
 const goToQA = (event) => {

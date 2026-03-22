@@ -213,6 +213,87 @@
         </div>
       </div>
     </Modal>
+
+    <!-- 面试完成弹窗 -->
+    <Modal
+      :open="showInterviewCompleteModal"
+      title="面试完成"
+      @close="closeInterviewCompleteModal"
+    >
+      <div class="card soft" style="padding:20px;">
+        <div v-if="interviewDetailLoading" class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>正在加载面试详情...</p>
+        </div>
+        <div v-else-if="interviewDetailError" class="error-state">
+          <p>{{ interviewDetailError }}</p>
+        </div>
+        <div v-else-if="interviewDetail" class="detail-content">
+          <div class="score-section">
+            <h4>面试评分</h4>
+            <div class="score-circle">
+              <svg class="score-ring" viewBox="0 0 140 140">
+                <circle cx="70" cy="70" r="62" fill="none" stroke="#f1f5f9" stroke-width="10"/>
+                <circle 
+                  cx="70" cy="70" r="62" 
+                  fill="none" 
+                  :stroke="getScoreColor(interviewDetail.overallScore)"
+                  stroke-width="10"
+                  stroke-linecap="round"
+                  :stroke-dasharray="2 * Math.PI * 62"
+                  :stroke-dashoffset="2 * Math.PI * 62 - (interviewDetail.overallScore / 100) * 2 * Math.PI * 62"
+                  class="score-progress"
+                />
+              </svg>
+              <div class="score-value">
+                <span class="score-number">{{ interviewDetail.overallScore }}</span>
+                <span class="score-total">/100</span>
+              </div>
+            </div>
+            <p class="score-feedback">{{ interviewDetail.overallFeedback || '表现良好，展示了扎实的技术基础。' }}</p>
+          </div>
+          <div class="summary-section">
+            <div v-if="interviewDetail.strengths && interviewDetail.strengths.length > 0" class="summary-card">
+              <h5>表现优势</h5>
+              <ul>
+                <li v-for="(strength, i) in interviewDetail.strengths" :key="i">{{ strength }}</li>
+              </ul>
+            </div>
+            <div v-if="interviewDetail.improvements && interviewDetail.improvements.length > 0" class="summary-card">
+              <h5>改进建议</h5>
+              <ul>
+                <li v-for="(improvement, i) in interviewDetail.improvements" :key="i">{{ improvement }}</li>
+              </ul>
+            </div>
+          </div>
+          <div class="questions-summary">
+            <h5>问答记录</h5>
+            <p>共 {{ interviewDetail.answers?.length || 0 }} 个问题</p>
+            <div v-if="interviewDetail.answers && interviewDetail.answers.length > 0" class="answers-list">
+              <div v-for="(answer, index) in interviewDetail.answers" :key="index" class="answer-item">
+                <div class="answer-question">
+                  <span class="question-index">Q{{ answer.questionIndex + 1 }}:</span>
+                  {{ answer.question }}
+                </div>
+                <div class="answer-content">
+                  <span class="answer-label">你的回答:</span>
+                  <span class="answer-text">{{ answer.userAnswer || '(未回答)' }}</span>
+                </div>
+                <div v-if="answer.feedback" class="answer-feedback">
+                  <span class="feedback-label">AI 评价:</span>
+                  <span class="feedback-text">{{ answer.feedback }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn primary" @click="closeInterviewCompleteModal">
+          确认
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -273,15 +354,23 @@ const currentQuestionObj = ref({
 function rand(a,b){ return Math.round(a + Math.random()*(b-a)) }
 function clamp(x){ return Math.max(45, Math.min(96, x)) }
 
+// 获取分数颜色
+function getScoreColor(score) {
+  if (score >= 80) return '#22c55e'
+  if (score >= 60) return '#f59e0b'
+  return '#ef4444'
+}
+
 // 从 URL 查询参数读取配置（从简历分析页面传入）
 const routeQuery = route.query
 
-// 从 localStorage 读取面试配置（作为后备）
+// 从 localStorage 读取面试配置（优先读取 interviewSettings，然后是 interviewConfig）
+const savedSettings = JSON.parse(localStorage.getItem('interviewSettings') || '{}')
 const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
 
 // 面试配置 - 优先使用 URL 参数，其次是 localStorage，最后是默认值
 const cfg = reactive({
-  type: routeQuery.type || savedConfig.type || 'frontend',               // frontend | backend | algo | pm
+  type: routeQuery.type || savedSettings.jobType || savedConfig.type || 'frontend',               // frontend | backend | algo | pm
   voice: routeQuery.voice || savedConfig.voice || 'alex',
   rate: routeQuery.rate ? parseFloat(routeQuery.rate) : (savedConfig.rate || 1.0),
   showSubtitles: routeQuery.showSubtitles !== undefined 
@@ -289,10 +378,11 @@ const cfg = reactive({
     : (savedConfig.showSubtitles !== undefined ? savedConfig.showSubtitles : true),
   thinkSeconds: routeQuery.thinkSeconds ? parseInt(routeQuery.thinkSeconds) : (savedConfig.thinkSeconds || 20),
   avatarPos: routeQuery.avatarPos || savedConfig.avatarPos || 'left',         // left | right | float
-  jobId: routeQuery.jobId !== undefined ? parseInt(routeQuery.jobId) : (savedConfig.jobId !== undefined ? savedConfig.jobId : 0),  // 0: 前端, 1: 后端, 2: 测试
+  jobId: routeQuery.jobId !== undefined ? parseInt(routeQuery.jobId) : (savedSettings.jobId || savedConfig.jobId !== undefined ? savedConfig.jobId : 0),  // 0: 前端, 1: 后端, 2: 测试
   resumeText: routeQuery.resumeText || savedConfig.resumeText || '简历文本',    // 简历文本
-  resumeId: routeQuery.resumeId ? parseInt(routeQuery.resumeId) : (savedConfig.resumeId || 1),                // 简历ID
-  questionCount: routeQuery.questionCount ? parseInt(routeQuery.questionCount) : (savedConfig.questionCount || 8)       // 题目数量(4-20)
+  resumeId: routeQuery.resumeId ? parseInt(routeQuery.resumeId) : (savedSettings.resumeId || savedConfig.resumeId || 1),                // 简历ID
+  questionCount: routeQuery.questionCount ? parseInt(routeQuery.questionCount) : (savedSettings.questionCount || savedConfig.questionCount || 8),       // 题目数量(4-20)
+  knowledgeBaseIds: savedSettings.knowledgeBaseIds || []
 })
 
 // 倍速 range slider 的值（0.5~2.0）
@@ -304,6 +394,12 @@ watch(ttsRateNum, (v) => {
 // 运行时状态
 const subtitle = ref('')
 const speaking = ref(false)
+
+// 面试完成弹窗状态
+const showInterviewCompleteModal = ref(false)
+const interviewDetail = ref(null)
+const interviewDetailLoading = ref(false)
+const interviewDetailError = ref(null)
 
 // 面试题与对话
 const transcript = ref([]) // { id, role:'interviewer'|'candidate', text }
@@ -509,7 +605,8 @@ async function createInterviewSession() {
       questionCount: cfg.questionCount,
       resumeId: cfg.resumeId,
       jobId: cfg.jobId,
-      forceCreate: true
+      knowledgeBaseIds: cfg.knowledgeBaseIds,
+      forceCreate: forceCreateNew.value
     })
     
     // 保存会话信息
@@ -635,6 +732,15 @@ function handleContinueUnfinished() {
 
 // 开始新面试（放弃未完成的）- 完全照抄 EchoMind-feature-
 async function handleStartNew() {
+  if (unfinishedSession.value) {
+    // 删除未完成的面试会话
+    try {
+      await interviewApi.deleteSession(unfinishedSession.value.sessionId)
+    } catch (err) {
+      console.error('删除未完成面试失败:', err)
+    }
+  }
+  
   unfinishedSession.value = null
   showUnfinishedDialog.value = false
   forceCreateNew.value = true
@@ -990,7 +1096,7 @@ async function handleSubmitAnswer(answerText) {
   } else {
     // 面试已完成（正常结束，所有题目已回答完）
     // 与 EchoMind-feature- 一致：正常结束不调用 completeInterview，直接跳转
-    onInterviewComplete()
+    await onInterviewComplete()
   }
 }
 
@@ -1006,12 +1112,16 @@ async function finishInterview() {
 
   isSubmitting.value = true
   try {
-    // 调用提前交卷接口
-    await interviewApi.completeInterview(interviewSession.value.sessionId)
+    // 检查是否为本地会话
+    const isLocalSession = interviewSession.value.sessionId.startsWith('local_')
+    if (!isLocalSession) {
+      // 调用提前交卷接口
+      await interviewApi.completeInterview(interviewSession.value.sessionId)
+    }
     showCompleteConfirm.value = false
     
     // 面试已完成，评估将在后台进行，跳转到面试记录页
-    onInterviewComplete()
+    await onInterviewComplete()
   } catch (err) {
     subtitle.value = '提前交卷失败，请重试'
     console.error('[finishInterview] 提前交卷失败:', err)
@@ -1020,14 +1130,126 @@ async function finishInterview() {
   }
 }
 
-// 面试完成回调 - 跳转到面试记录页（与 EchoMind-feature- 完全一致）
-function onInterviewComplete() {
-  // 面试已完成，评估将在后台进行，跳转到面试记录页
+// 面试完成回调 - 关闭弹窗并返回主页面
+function closeInterviewCompleteModal() {
+  showInterviewCompleteModal.value = false
+  interviewDetail.value = null
+  interviewDetailError.value = null
+  
+  // 返回主页面
+  router.push('/')
+}
+
+// 面试完成回调 - 显示面试详情弹窗
+async function onInterviewComplete() {
   // 清除当前面试会话数据
   localStorage.removeItem('interviewConfig')
   
-  // 跳转到面试记录列表页
-  router.push('/app/records')
+  // 显示面试完成弹窗
+  showInterviewCompleteModal.value = true
+  interviewDetailLoading.value = true
+  interviewDetailError.value = null
+  
+  // 检查是否为本地会话
+  const isLocalSession = interviewSession.value.sessionId.startsWith('local_')
+  if (isLocalSession) {
+    // 本地会话使用模拟数据
+    interviewDetail.value = {
+      overallScore: 85,
+      overallFeedback: '整体表现良好，技术基础扎实，沟通表达清晰。',
+      strengths: [
+        '技术知识掌握全面',
+        '问题分析能力强',
+        '沟通表达清晰'
+      ],
+      improvements: [
+        '需要加强项目经验的描述',
+        '可以更详细地解释技术实现细节'
+      ],
+      answers: transcript.value.filter(msg => msg.role === 'interviewer').map((q, index) => {
+        const answer = transcript.value.find(a => a.role === 'candidate' && a.id > q.id)
+        return {
+          questionIndex: index,
+          question: q.text,
+          userAnswer: answer ? answer.text : '(未回答)',
+          feedback: '回答合理，思路清晰'
+        }
+      })
+    }
+    interviewDetailLoading.value = false
+    return
+  }
+  
+  // 真实会话：实现轮询机制等待评价生成
+  let pollingCount = 0
+  const maxPollingCount = 30 // 最多轮询30次（约15秒）
+  const pollingInterval = 500 // 每500毫秒轮询一次
+  
+  const pollReport = async () => {
+    try {
+      const report = await interviewApi.getReport(interviewSession.value.sessionId)
+      
+      // 检查报告是否完整
+      if (report && report.overallScore !== undefined && report.overallFeedback) {
+        interviewDetail.value = report
+        interviewDetailLoading.value = false
+        return true
+      } else {
+        // 报告不完整，继续轮询
+        pollingCount++
+        if (pollingCount < maxPollingCount) {
+          setTimeout(pollReport, pollingInterval)
+        } else {
+          // 轮询超时，显示备用数据
+          interviewDetailError.value = '评价生成需要时间，请稍后在面试记录中查看完整报告'
+          interviewDetail.value = {
+            overallScore: 0,
+            overallFeedback: '面试已完成，AI评价正在生成中，请稍后查看完整报告。',
+            strengths: ['表现积极', '态度认真'],
+            improvements: ['评价生成中...'],
+            answers: transcript.value.filter(msg => msg.role === 'interviewer').map((q, index) => {
+              const answer = transcript.value.find(a => a.role === 'candidate' && a.id > q.id)
+              return {
+                questionIndex: index,
+                question: q.text,
+                userAnswer: answer ? answer.text : '(未回答)',
+                feedback: '评价生成中...'
+              }
+            })
+          }
+          interviewDetailLoading.value = false
+        }
+      }
+    } catch (err) {
+      console.error('获取面试报告失败:', err)
+      pollingCount++
+      if (pollingCount < maxPollingCount) {
+        setTimeout(pollReport, pollingInterval)
+      } else {
+        // 轮询超时，显示备用数据
+        interviewDetailError.value = '获取面试评价失败，请稍后查看面试记录'
+        interviewDetail.value = {
+          overallScore: 0,
+          overallFeedback: '面试已完成，评价正在生成中，请稍后查看完整报告。',
+          strengths: ['表现积极', '态度认真'],
+          improvements: ['可以更详细地回答问题'],
+          answers: transcript.value.filter(msg => msg.role === 'interviewer').map((q, index) => {
+            const answer = transcript.value.find(a => a.role === 'candidate' && a.id > q.id)
+            return {
+              questionIndex: index,
+              question: q.text,
+              userAnswer: answer ? answer.text : '(未回答)',
+              feedback: '评价生成中...'
+            }
+          })
+        }
+        interviewDetailLoading.value = false
+      }
+    }
+  }
+  
+  // 开始轮询
+  await pollReport()
 }
 
 // 初始化
@@ -1067,6 +1289,231 @@ onBeforeUnmount(() => {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-state {
+  text-align: center;
+  padding: 40px;
+  color: #ef4444;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.detail-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.detail-content::-webkit-scrollbar-track {
+  background: var(--panel2);
+  border-radius: 3px;
+}
+
+.detail-content::-webkit-scrollbar-thumb {
+  background: var(--stroke);
+  border-radius: 3px;
+}
+
+.detail-content::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+.score-section {
+  text-align: center;
+  padding: 20px;
+  background: var(--panel);
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+}
+
+.score-section h4 {
+  margin-bottom: 16px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.score-circle {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 16px;
+}
+
+.score-ring {
+  transform: rotate(-90deg);
+}
+
+.score-progress {
+  transition: stroke-dashoffset 0.8s ease;
+}
+
+.score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.score-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.score-total {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.score-feedback {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.summary-section {
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--panel);
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+}
+
+.summary-card h5 {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.summary-card ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.summary-card li {
+  margin-bottom: 4px;
+}
+
+.questions-summary {
+  padding: 16px;
+  background: var(--panel);
+  border-radius: 8px;
+  border: 1px solid var(--stroke);
+}
+
+.questions-summary h5 {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.questions-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.answers-list {
+  margin-top: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.answer-item {
+  background: var(--panel2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--stroke);
+}
+
+.answer-question {
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.question-index {
+  color: var(--primary);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.answer-content {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.answer-label {
+  color: var(--muted);
+  margin-right: 6px;
+  font-weight: 500;
+}
+
+.answer-text {
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.answer-feedback {
+  font-size: 12px;
+  background: var(--panel);
+  padding: 6px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.feedback-label {
+  color: var(--muted);
+  margin-right: 6px;
+  font-weight: 500;
+}
+
+.feedback-text {
+  color: var(--text);
+  line-height: 1.4;
 }
 
 /* 背景光晕效果 */
@@ -1178,6 +1625,8 @@ onBeforeUnmount(() => {
   padding-bottom: 20px;
   position: relative;
   z-index: 1;
+  max-height: 40vh;
+  flex-shrink: 1;
 }
 /* 新增：按钮组样式 */
 .avatar-header {
@@ -1222,7 +1671,9 @@ onBeforeUnmount(() => {
 
 .live2d-stage {
   width: 200px;
-  height: 260px;
+  max-height: 260px;
+  height: 30vh;
+  min-height: 200px;
   position: relative;
   border-radius: 16px;
   overflow: hidden;
@@ -1252,6 +1703,7 @@ onBeforeUnmount(() => {
   background: var(--bg1);
   border-radius: 16px 16px 0 0;
   margin: 0 20px;
+  min-height: 200px;
 }
 
 .chat-messages {
@@ -1393,9 +1845,17 @@ onBeforeUnmount(() => {
 
 /* 底部输入区域 */
 .input-section {
-  padding: 12px 16px 24px;
+  padding: 12px 20px 24px;
   position: relative;
   z-index: 1;
+  margin-top: auto;
+  min-height: 80px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg0);
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid var(--stroke);
 }
 
 .text-input-bar {

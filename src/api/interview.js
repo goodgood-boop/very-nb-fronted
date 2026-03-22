@@ -104,11 +104,39 @@ export const interviewApi = {
 
   /**
    * 获取面试历史列表
-   * GET /api/interview/sessions/history
+   * 通过获取所有简历来汇总面试记录（与 EchoMind 前端保持一致）
    * @returns {Promise<InterviewItem[]>}
    */
   async getInterviewHistory() {
-    return request.get('/api/interview/sessions/history')
+    try {
+      const { resumeApi } = await import('./resume.js')
+      const resumes = await resumeApi.getResumes()
+      const allInterviews = []
+      
+      // 遍历每个简历，获取其面试记录
+      for (const resume of resumes) {
+        const detail = await resumeApi.getResumeDetail(resume.id)
+        if (detail.interviews && detail.interviews.length > 0) {
+          detail.interviews.forEach(interview => {
+            allInterviews.push({
+              ...interview,
+              resumeId: resume.id,
+              resumeFilename: resume.filename
+            })
+          })
+        }
+      }
+      
+      // 按创建时间倒序排序
+      return allInterviews.sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.startTime || 0).getTime()
+        const timeB = new Date(b.createdAt || b.startTime || 0).getTime()
+        return timeB - timeA
+      })
+    } catch (err) {
+      console.error('获取面试历史失败:', err)
+      return []
+    }
   },
 
   /**
