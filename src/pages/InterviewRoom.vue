@@ -30,7 +30,7 @@
     <div v-if="interviewSession.questions.length > 0 && currentQuestionObj.question" class="question-progress-panel">
       <div class="progress-header">
         <span class="progress-title">
-          题目 {{ currentQuestionObj.questionIndex + 1 }} / {{ interviewSession.questions.length }}
+          题目 {{ currentMainQuestionNumber }} / {{ interviewSession.questions.filter(q => !q.isFollowUp).length }}
         </span>
         <span class="progress-percent">{{ Math.round(progressPercent) }}%</span>
       </div>
@@ -497,6 +497,30 @@ const currentQuestion = computed(() => {
   return currentQuestionObj.value.question || '请做一个自我介绍。'
 })
 
+// 计算当前主问题序号（用于显示）
+const currentMainQuestionNumber = computed(() => {
+  const currentQ = currentQuestionObj.value
+  if (!currentQ.question) return 1
+  
+  const isFollowUp = currentQ.isFollowUp || (currentQ.addQuestionIndex > 0)
+  const mainQuestions = interviewSession.value.questions.filter(q => !q.isFollowUp)
+  
+  if (isFollowUp) {
+    // 追问问题，找到对应的主问题序号
+    const parentIndex = currentQ.mainQuestionIndex !== undefined ? currentQ.mainQuestionIndex : currentQ.questionIndex
+    const idx = mainQuestions.findIndex(q => 
+      (q.questionIndex !== undefined ? q.questionIndex : interviewSession.value.questions.indexOf(q)) === parentIndex
+    )
+    return idx !== -1 ? idx + 1 : (parentIndex < mainQuestions.length ? parentIndex + 1 : mainQuestions.length)
+  } else {
+    // 主问题，计算这是第几个主问题
+    const idx = mainQuestions.findIndex(q => 
+      (q.questionIndex !== undefined ? q.questionIndex : interviewSession.value.questions.indexOf(q)) === currentQ.questionIndex
+    )
+    return idx !== -1 ? idx + 1 : 1
+  }
+})
+
 // 进度百分比 - 基于主问题数量计算（不包括追问）
 const progressPercent = computed(() => {
   // 计算主问题数量（isFollowUp为false的问题）
@@ -851,11 +875,31 @@ function restoreSession(sessionToRestore) {
     
     // 恢复消息历史
     transcript.value = []
+    // 先获取所有主问题，用于计算正确的mainIndex
+    const mainQuestionsList = sessionToRestore.questions.filter(q => !q.isFollowUp)
+    
     for (let i = 0; i <= sessionToRestore.currentQuestionIndex; i++) {
       const q = sessionToRestore.questions[i]
       if (q) {
         const isFollowUp = q.isFollowUp || (q.addQuestionIndex > 0)
-        const mainIndex = q.questionIndex + 1
+        
+        // 计算正确的主问题序号（与ask函数逻辑一致）
+        let mainIndex
+        if (isFollowUp) {
+          // 追问问题，找到对应的主问题序号
+          const parentIndex = q.mainQuestionIndex !== undefined ? q.mainQuestionIndex : q.questionIndex
+          const idx = mainQuestionsList.findIndex(mq => 
+            (mq.questionIndex !== undefined ? mq.questionIndex : sessionToRestore.questions.indexOf(mq)) === parentIndex
+          )
+          mainIndex = idx !== -1 ? idx + 1 : (parentIndex < mainQuestionsList.length ? parentIndex + 1 : mainQuestionsList.length)
+        } else {
+          // 主问题，计算这是第几个主问题
+          const idx = mainQuestionsList.findIndex(mq => 
+            (mq.questionIndex !== undefined ? mq.questionIndex : sessionToRestore.questions.indexOf(mq)) === q.questionIndex
+          )
+          mainIndex = idx !== -1 ? idx + 1 : 1
+        }
+        
         const followUpIndex = isFollowUp ? (q.addQuestionIndex || 1) : null
         
         transcript.value.push({

@@ -52,6 +52,41 @@
       <div class="bg-circle bg-circle-2"></div>
       <div class="bg-circle bg-circle-3"></div>
     </div>
+
+    <!-- 未完成面试提示弹窗 -->
+    <div v-if="showUnfinishedDialog" class="unfinished-dialog-overlay" @click="handleOverlayClick">
+      <div class="unfinished-dialog" @click.stop>
+        <div class="dialog-header">
+          <div class="dialog-icon">📋</div>
+          <h3 class="dialog-title">发现未完成的面试</h3>
+        </div>
+        <div class="dialog-content">
+          <p class="dialog-message">
+            您有一个进行中的面试（题目 {{ unfinishedSession?.currentQuestionIndex + 1 }}/{{ unfinishedSession?.questions?.length }}），是否继续？
+          </p>
+          <div class="dialog-info">
+            <div class="info-item">
+              <span class="info-label">当前进度：</span>
+              <span class="info-value">{{ Math.round(((unfinishedSession?.currentQuestionIndex || 0) / (unfinishedSession?.questions?.length || 1)) * 100) }}%</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">已答题目：</span>
+              <span class="info-value">{{ unfinishedSession?.currentQuestionIndex || 0 }} 题</span>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn-secondary" @click="handleStartNew">
+            <span class="btn-icon">🆕</span>
+            开始新面试
+          </button>
+          <button class="btn-primary" @click="handleContinue">
+            <span class="btn-icon">▶️</span>
+            继续面试
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -84,6 +119,11 @@ const tips = [
 ]
 const currentTip = ref(tips[0])
 
+// 未完成面试弹窗相关
+const showUnfinishedDialog = ref(false)
+const unfinishedSession = ref(null)
+const sessionData = ref(null)
+
 let progressTimer = null
 let tipTimer = null
 
@@ -115,6 +155,106 @@ const startTipRotation = () => {
     tipIndex = (tipIndex + 1) % tips.length
     currentTip.value = tips[tipIndex]
   }, 4000)
+}
+
+// 检查返回的是否是未完成会话（已答题进度 > 0）
+const isUnfinishedSession = (data) => {
+  // 如果 currentQuestionIndex > 0，说明已经答过题了，是未完成会话
+  return data.currentQuestionIndex > 0
+}
+
+// 处理继续面试
+const handleContinue = () => {
+  if (!sessionData.value) return
+  
+  // 保存会话信息到 localStorage
+  const settings = JSON.parse(localStorage.getItem('interviewSettings') || '{}')
+  const resumeText = localStorage.getItem('resumeText') || ''
+  
+  localStorage.setItem('interviewConfig', JSON.stringify({
+    sessionId: sessionData.value.sessionId,
+    questions: sessionData.value.questions.map(q => ({
+      text: q.question,
+      category: q.category,
+      type: q.type,
+      questionIndex: q.questionIndex,
+      isFollowUp: q.isFollowUp || false,
+      mainQuestionIndex: q.parentQuestionIndex !== undefined ? q.parentQuestionIndex : q.mainQuestionIndex,
+      followupQuestions: []
+    })),
+    currentQuestionIndex: sessionData.value.currentQuestionIndex || 0,
+    resumeText: resumeText,
+    jobId: settings.jobId
+  }))
+  
+  // 关闭弹窗并跳转
+  showUnfinishedDialog.value = false
+  router.replace('/app/home/interview/room')
+}
+
+// 处理开始新面试（强制创建新会话）
+const handleStartNew = async () => {
+  showUnfinishedDialog.value = false
+  
+  try {
+    currentStep.value = '正在创建新面试...'
+    const settings = JSON.parse(localStorage.getItem('interviewSettings') || '{}')
+    const resumeText = localStorage.getItem('resumeText') || ''
+    const questionCount = parseInt(settings.questionCount) || 8
+    
+    // 1. 先删除原来的未完成会话（如果有）
+    if (sessionData.value?.sessionId) {
+      try {
+        await interviewApi.deleteSession(sessionData.value.sessionId)
+        console.log('已删除原未完成会话:', sessionData.value.sessionId)
+      } catch (err) {
+        console.error('删除原未完成会话失败:', err)
+        // 继续创建新会话，不阻塞流程
+      }
+    }
+    
+    // 2. 强制创建新会话
+    const data = await interviewApi.createSession({
+      resumeText: resumeText,
+      questionCount: questionCount,
+      resumeId: parseInt(settings.resumeId) || null,
+      jobId: parseInt(settings.jobId) || 0,
+      knowledgeBaseIds: settings.knowledgeBaseIds || [],
+      forceCreate: true  // 强制创建新会话
+    })
+    
+    // 3. 保存新会话信息
+    localStorage.setItem('interviewConfig', JSON.stringify({
+      sessionId: data.sessionId,
+      questions: data.questions.map(q => ({
+        text: q.question,
+        category: q.category,
+        type: q.type,
+        questionIndex: q.questionIndex,
+        isFollowUp: q.isFollowUp || false,
+        mainQuestionIndex: q.parentQuestionIndex !== undefined ? q.parentQuestionIndex : q.mainQuestionIndex,
+        followupQuestions: []
+      })),
+      currentQuestionIndex: 0,  // 新会话从第一题开始
+      resumeText: resumeText,
+      jobId: settings.jobId
+    }))
+    
+    // 4. 清理临时数据
+    unfinishedSession.value = null
+    sessionData.value = null
+    
+    // 5. 跳转到面试房间
+    router.replace('/app/home/interview/room')
+  } catch (error) {
+    console.error('创建新面试失败:', error)
+    currentStep.value = '创建新面试失败，请刷新页面重试'
+  }
+}
+
+// 处理点击遮罩层（阻止关闭）
+const handleOverlayClick = () => {
+  // 点击遮罩层不关闭弹窗，必须让用户做出选择
 }
 
 // 初始化面试
@@ -163,7 +303,19 @@ const initInterview = async () => {
     console.log('后端返回的当前题目索引:', data.currentQuestionIndex)
     console.log('后端返回的题目列表:', data.questions)
 
-    // 保存会话信息
+    // 检查是否是未完成会话
+    if (isUnfinishedSession(data)) {
+      console.log('检测到未完成会话，显示选择弹窗')
+      sessionData.value = data
+      unfinishedSession.value = {
+        currentQuestionIndex: data.currentQuestionIndex,
+        questions: data.questions
+      }
+      showUnfinishedDialog.value = true
+      return  // 停止后续流程，等待用户选择
+    }
+
+    // 是新会话，直接保存并跳转
     localStorage.setItem('interviewConfig', JSON.stringify({
       sessionId: data.sessionId,
       questions: data.questions.map(q => ({
@@ -534,5 +686,149 @@ onUnmounted(() => {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33% { transform: translate(30px, -30px) scale(1.1); }
   66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+/* 未完成面试弹窗样式 */
+.unfinished-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.unfinished-dialog {
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 480px;
+  width: 90%;
+  border: 1px solid var(--stroke);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dialog-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.dialog-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.dialog-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.dialog-content {
+  margin-bottom: 24px;
+}
+
+.dialog-message {
+  font-size: 16px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.dialog-info {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-around;
+  gap: 20px;
+}
+
+.info-item {
+  text-align: center;
+}
+
+.info-label {
+  font-size: 13px;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.info-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-secondary,
+.btn-primary {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+}
+
+.btn-secondary {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--stroke);
+}
+
+.btn-secondary:hover {
+  background: var(--panel);
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand) 0%, #8b5cf6 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+}
+
+.btn-icon {
+  font-size: 16px;
 }
 </style>

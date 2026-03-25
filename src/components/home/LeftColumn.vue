@@ -1913,9 +1913,15 @@ const getInterviewTitle = (record) => {
 
 // 获取面试预览文本
 const getInterviewPreview = (record) => {
+  // 如果有评价反馈，显示反馈内容
   if (record.overallFeedback) {
     return record.overallFeedback.slice(0, 50) + (record.overallFeedback.length > 50 ? '...' : '')
   }
+  // 如果有分数但没有反馈，显示分数信息
+  if (record.overallScore !== null && record.overallScore !== undefined) {
+    return `综合评分: ${record.overallScore}分`
+  }
+  // 面试进行中
   if (record.status === 'IN_PROGRESS') {
     return '面试进行中...'
   }
