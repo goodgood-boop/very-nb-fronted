@@ -345,7 +345,10 @@ async function speak(text, voice = 'zh-CN-XiaoxiaoNeural', rate = '+0%') {
   // 1) request TTS
   const resp = await fetch(`${API_BASE}/api/interview/sessions/tts`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': '1'  // 添加用户认证头
+    },
     body: JSON.stringify({ text: t, voice, rate }),
   })
   if (!resp.ok) {

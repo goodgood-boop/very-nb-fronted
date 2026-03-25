@@ -8,7 +8,7 @@
     <div class="column-content">
       <!-- 1. 标签切换器：使用 fade-slide 动画 -->
       <Transition name="fade-slide">
-        <div v-if="expanded" class="tab-switcher">
+        <div v-if="expanded && currentView === 'list'" class="tab-switcher">
           <button 
             class="tab-btn" 
             :class="{ active: activeTab === 'record' }"
@@ -329,80 +329,228 @@
               </TransitionGroup>
             </div>
 
-            <!-- 面试统计标签页（展开状态） -->
+            <!-- 面试统计标签页（展开状态）- 新版：调用后端接口 -->
             <div v-else-if="activeTab === 'stats'" class="stats-tab">
               <div class="stats-content">
-                <!-- 时间范围切换 -->
-                <div class="time-range-switcher">
-                  <button 
-                    class="range-btn" 
-                    :class="{ active: timeRange === 'week' }"
-                    @click="timeRange = 'week'"
-                  >
-                    近一周
-                  </button>
-                  <button 
-                    class="range-btn" 
-                    :class="{ active: timeRange === 'month' }"
-                    @click="timeRange = 'month'"
-                  >
-                    近一月
-                  </button>
-                </div>
-
-                <!-- 统计概览卡片 -->
-                <div class="stats-overview">
-                  <div class="overview-card">
-                    <div class="overview-icon">📊</div>
-                    <div class="overview-info">
-                      <div class="overview-value">{{ filteredAnalytics.avgScore }}</div>
-                      <div class="overview-label">平均分</div>
-                    </div>
-                  </div>
-                  <div class="overview-card">
-                    <div class="overview-icon">📝</div>
-                    <div class="overview-info">
-                      <div class="overview-value">{{ filteredAnalytics.totalCount }}</div>
-                      <div class="overview-label">面试次数</div>
-                    </div>
-                  </div>
-                  <div class="overview-card">
-                    <div class="overview-icon">📈</div>
-                    <div class="overview-info">
-                      <div class="overview-value" :class="getImprovementClass()">{{ getImprovementValue() }}</div>
-                      <div class="overview-label">成长幅度</div>
-                    </div>
+                <!-- 简历选择器 -->
+                <div class="selector-wrapper">
+                  <label class="selector-label">
+                    <span class="selector-icon">📄</span>
+                    <span>选择简历</span>
+                  </label>
+                  <div class="custom-select">
+                    <select v-model="statsSelectedResumeId" class="select-input" @change="onStatsResumeChange">
+                      <option value="">请选择简历</option>
+                      <option v-for="resume in statsResumes" :key="resume.id" :value="resume.id">
+                        {{ resume.filename }}
+                      </option>
+                    </select>
+                    <span class="select-arrow">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                      </svg>
+                    </span>
                   </div>
                 </div>
 
-                <!-- 成长曲线 -->
-                <div class="chart-section">
-                  <div class="section-header">
-                    <span class="section-title">成长曲线</span>
-                    <span class="section-subtitle">分数变化趋势</span>
-                  </div>
-                  <div class="chart-container">
-                    <canvas ref="statsChartCanvas" class="stats-chart"></canvas>
-                  </div>
+                <!-- 加载状态 -->
+                <div v-if="statsLoading" class="loading-state">
+                  <div class="loading-spinner"></div>
+                  <p>加载统计数据...</p>
                 </div>
 
-                <!-- 提升建议 -->
-                <div class="suggestions-section">
-                  <div class="section-header">
-                    <span class="section-title">💡 提升建议</span>
-                  </div>
-                  
-                  <!-- 建议列表 -->
-                  <div v-if="suggestions.length > 0" class="suggestion-list">
-                    <div v-for="(suggestion, idx) in suggestions" :key="idx" class="suggestion-item">
-                      <span class="suggestion-num">{{ idx + 1 }}</span>
-                      <span class="suggestion-text">{{ suggestion }}</span>
+                <!-- 错误提示 -->
+                <div v-else-if="statsError" class="error-state">
+                  <p>{{ statsError }}</p>
+                  <button class="retry-btn" @click="loadStatsData">重试</button>
+                </div>
+
+                <!-- 无数据提示 -->
+                <div v-else-if="!statsHasData" class="empty-state">
+                  <p>暂无面试数据</p>
+                  <p class="sub-text">该简历暂无面试记录，请先完成一次面试</p>
+                </div>
+
+                <!-- 统计数据展示 -->
+                <template v-else>
+                  <!-- 统计概览卡片 -->
+                  <div class="stats-overview">
+                    <div class="overview-card">
+                      <div class="overview-icon">📝</div>
+                      <div class="overview-info">
+                        <div class="overview-value">{{ statsTotalCount }}</div>
+                        <div class="overview-label">面试次数</div>
+                      </div>
+                    </div>
+                    <div class="overview-card">
+                      <div class="overview-icon">📊</div>
+                      <div class="overview-info">
+                        <div class="overview-value">{{ statsAverageScore }}</div>
+                        <div class="overview-label">平均分</div>
+                      </div>
+                    </div>
+                    <div class="overview-card">
+                      <div class="overview-icon">🏆</div>
+                      <div class="overview-info">
+                        <div class="overview-value">{{ statsMaxScore }}</div>
+                        <div class="overview-label">最高分</div>
+                      </div>
+                    </div>
+                    <div class="overview-card">
+                      <div class="overview-icon">📉</div>
+                      <div class="overview-info">
+                        <div class="overview-value">{{ statsMinScore }}</div>
+                        <div class="overview-label">最低分</div>
+                      </div>
                     </div>
                   </div>
-                  <div v-else class="empty-suggestion">
-                    <p>暂无建议，开始更多面试来获取个性化建议</p>
+
+                  <!-- 能力维度雷达图 -->
+                  <div v-if="statsDimAverages.length > 0" class="radar-section">
+                    <div class="section-header">
+                      <span class="section-title">🎯 能力维度画像</span>
+                      <span class="section-subtitle">各维度平均分雷达图</span>
+                    </div>
+                    <div class="radar-container">
+                      <svg :viewBox="`0 0 ${radarSize} ${radarSize}`" class="radar-svg">
+                        <!-- 渐变定义 -->
+                        <defs>
+                          <radialGradient id="radarGradient" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(99, 102, 241, 0.6)" />
+                            <stop offset="100%" stop-color="rgba(139, 92, 246, 0.3)" />
+                          </radialGradient>
+                        </defs>
+                        <!-- 背景网格 -->
+                        <g class="grid">
+                          <!-- 同心多边形 -->
+                          <polygon
+                            v-for="level in 5"
+                            :key="level"
+                            :points="getRadarGridPoints(level)"
+                            class="grid-line"
+                          />
+                          <!-- 轴线 -->
+                          <line
+                            v-for="(item, i) in statsRadarData"
+                            :key="'axis-' + i"
+                            :x1="radarCenter"
+                            :y1="radarCenter"
+                            :x2="getRadarPoint(item.angle, radarMaxRadius).x"
+                            :y2="getRadarPoint(item.angle, radarMaxRadius).y"
+                            class="axis-line"
+                          />
+                        </g>
+
+                        <!-- 数据区域 -->
+                        <polygon
+                          :points="radarDataPoints"
+                          class="data-area"
+                        />
+                        <polygon
+                          :points="radarDataPoints"
+                          class="data-border"
+                          fill="none"
+                        />
+
+                        <!-- 数据点 -->
+                        <circle
+                          v-for="(item, i) in statsRadarData"
+                          :key="'point-' + i"
+                          :cx="getRadarPoint(item.angle, item.radius).x"
+                          :cy="getRadarPoint(item.angle, item.radius).y"
+                          r="4"
+                          class="data-point"
+                        />
+
+                        <!-- 标签 -->
+                        <text
+                          v-for="(item, i) in statsRadarData"
+                          :key="'label-' + i"
+                          :x="getRadarLabelPosition(item).x"
+                          :y="getRadarLabelPosition(item).y"
+                          class="axis-label"
+                          text-anchor="middle"
+                          dominant-baseline="middle"
+                        >
+                          {{ item.name.length > 4 ? item.name.slice(0, 4) + '..' : item.name }}
+                        </text>
+
+                        <!-- 数值标签 -->
+                        <text
+                          v-for="(item, i) in statsRadarData"
+                          :key="'value-' + i"
+                          :x="getRadarPoint(item.angle, item.radius).x"
+                          :y="getRadarPoint(item.angle, item.radius).y - 10"
+                          class="value-label"
+                          text-anchor="middle"
+                        >
+                          {{ item.value }}
+                        </text>
+                      </svg>
+                    </div>
                   </div>
-                </div>
+
+                  <!-- 维度分数走势折线图 -->
+                  <div v-if="statsAllDimensions.length > 0" class="line-chart-section">
+                    <div class="section-header">
+                      <span class="section-title">📈 维度分数走势</span>
+                    </div>
+                    <!-- 维度选择器 -->
+                    <div class="selector-wrapper">
+                      <label class="selector-label">
+                        <span class="selector-icon">🎯</span>
+                        <span>选择维度</span>
+                      </label>
+                      <div class="custom-select">
+                        <select v-model="statsSelectedDimension" class="select-input">
+                          <option value="">请选择维度</option>
+                          <option v-for="dim in statsAllDimensions" :key="dim" :value="dim">
+                            {{ dim }}
+                          </option>
+                        </select>
+                        <span class="select-arrow">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9l6 6 6-6"/>
+                          </svg>
+                        </span>
+                      </div>
+                    </div>
+                    <!-- 趋势分析 -->
+                    <div v-if="statsSelectedDimension && statsDimTrend" class="trend-analysis">
+                      <div class="trend-item" :class="statsDimTrend.direction">
+                        <span class="trend-icon">{{ statsDimTrend.direction === 'up' ? '📈' : statsDimTrend.direction === 'down' ? '📉' : '➡️' }}</span>
+                        <span class="trend-text">{{ statsDimTrend.text }}</span>
+                      </div>
+                    </div>
+                    <!-- 折线图 -->
+                    <div v-if="statsSelectedDimension" class="line-chart-container">
+                      <canvas ref="statsChartCanvas" class="line-chart"></canvas>
+                    </div>
+                    <div v-else class="select-prompt">
+                      <span>👆 请选择上方维度查看分数变化趋势</span>
+                    </div>
+                  </div>
+
+                  <!-- 面试记录明细 -->
+                  <div class="records-detail">
+                    <div class="section-header">
+                      <span class="section-title">📝 面试记录明细</span>
+                    </div>
+                    <div class="records-list">
+                      <div v-for="(record, index) in statsProcessedData" :key="index" class="record-item">
+                        <div class="record-header">
+                          <span class="record-index">第 {{ index + 1 }} 次</span>
+                          <span class="record-score" :class="getScoreClass(record.overall)">{{ record.overall }}分</span>
+                        </div>
+                        <div v-if="Object.keys(record.dimensions).length > 0" class="record-dims">
+                          <span v-for="(score, dim) in record.dimensions" :key="dim" class="dim-tag">
+                            {{ dim }}: {{ score }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -423,64 +571,127 @@
               </div>
 
               <template v-else-if="currentRecordDetail">
-                <h3 class="detail-title">{{ getInterviewTitle(currentRecordDetail) }}</h3>
-                <div class="detail-meta">
-                  <span class="detail-date">{{ formatDateTime(currentRecordDetail.createdAt) }}</span>
-                  <span v-if="currentRecordDetail.overallScore" class="detail-score" :class="getScoreClass(currentRecordDetail.overallScore)">
-                    {{ currentRecordDetail.overallScore }}分
-                  </span>
-                  <span v-else class="detail-status" :class="currentRecordDetail.status?.toLowerCase()">
-                    {{ getStatusText(currentRecordDetail.status) }}
-                  </span>
-                </div>
-                
-                <!-- 能力维度 -->
-                <div v-if="currentRecordDetail.categoryScores?.length" class="detail-section">
-                  <h4>能力维度</h4>
-                  <div class="dimension-list">
-                    <div v-for="dim in currentRecordDetail.categoryScores" :key="dim.category" class="dimension-item">
-                      <span class="dimension-name">{{ dim.category }}</span>
-                      <div class="dimension-bar">
-                        <div class="dimension-fill" :style="{ width: dim.score + '%' }" :class="getScoreClass(dim.score)"></div>
-                      </div>
-                      <span class="dimension-score">{{ dim.score }}</span>
+                <!-- 顶部分数圆环 -->
+                <div v-if="currentRecordDetail.overallScore" class="score-header">
+                  <div class="score-ring-container">
+                    <svg class="score-ring" viewBox="0 0 120 120">
+                      <circle class="ring-bg" cx="60" cy="60" r="54" fill="none" stroke="var(--stroke)" stroke-width="8"/>
+                      <circle 
+                        class="ring-fill" 
+                        cx="60" cy="60" r="54" 
+                        fill="none" 
+                        :stroke="getScoreColor(currentRecordDetail.overallScore)" 
+                        stroke-width="8"
+                        stroke-linecap="round"
+                        :stroke-dasharray="339.292"
+                        :stroke-dashoffset="339.292 * (1 - currentRecordDetail.overallScore / 100)"
+                        transform="rotate(-90 60 60)"
+                      />
+                    </svg>
+                    <div class="score-content">
+                      <span class="score-value">{{ currentRecordDetail.overallScore }}</span>
+                      <span class="score-label">总分</span>
                     </div>
                   </div>
                 </div>
 
                 <!-- 面试评价 -->
-                <div v-if="currentRecordDetail.overallFeedback" class="detail-section">
-                  <h4>面试评价</h4>
-                  <p class="detail-feedback">{{ currentRecordDetail.overallFeedback }}</p>
+                <div v-if="currentRecordDetail.overallFeedback" class="detail-section feedback-section-card">
+                  <div class="section-header">
+                    <span class="section-icon">💬</span>
+                    <h4>面试评估</h4>
+                  </div>
+                  <div class="section-content">
+                    <p class="detail-feedback">{{ currentRecordDetail.overallFeedback }}</p>
+                  </div>
+                </div>
+
+                <!-- 能力维度 -->
+                <div v-if="currentRecordDetail.categoryScores?.length" class="detail-section dimensions-section">
+                  <div class="section-header">
+                    <span class="section-icon">📊</span>
+                    <h4>能力维度</h4>
+                  </div>
+                  <div class="section-content">
+                    <div class="dimension-list">
+                      <div v-for="dim in currentRecordDetail.categoryScores" :key="dim.category" class="dimension-item">
+                        <span class="dimension-name">{{ dim.category }}</span>
+                        <div class="dimension-bar">
+                          <div class="dimension-fill" :style="{ width: dim.score + '%', background: getScoreColor(dim.score) }"></div>
+                        </div>
+                        <span class="dimension-score" :style="{ color: getScoreColor(dim.score) }">{{ dim.score }}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- 优点 -->
-                <div v-if="currentRecordDetail.strengths?.length" class="detail-section">
-                  <h4>优点</h4>
-                  <ul class="detail-list">
-                    <li v-for="(strength, index) in currentRecordDetail.strengths" :key="index">{{ strength }}</li>
-                  </ul>
+                <div v-if="currentRecordDetail.strengths?.length" class="detail-section strengths-section">
+                  <div class="section-header strengths-header">
+                    <span class="section-icon">✨</span>
+                    <h4>表现优势</h4>
+                  </div>
+                  <div class="section-content">
+                    <ul class="detail-list strengths-list">
+                      <li v-for="(strength, index) in currentRecordDetail.strengths" :key="index">
+                        <span class="list-bullet">●</span>
+                        <span class="list-text">{{ strength }}</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
 
                 <!-- 改进建议 -->
-                <div v-if="currentRecordDetail.improvements?.length" class="detail-section">
-                  <h4>改进建议</h4>
-                  <ul class="detail-list">
-                    <li v-for="(improvement, index) in currentRecordDetail.improvements" :key="index">{{ improvement }}</li>
-                  </ul>
+                <div v-if="currentRecordDetail.improvements?.length" class="detail-section improvements-section">
+                  <div class="section-header improvements-header">
+                    <span class="section-icon">💡</span>
+                    <h4>改进建议</h4>
+                  </div>
+                  <div class="section-content">
+                    <ul class="detail-list improvements-list">
+                      <li v-for="(improvement, index) in currentRecordDetail.improvements" :key="index">
+                        <span class="list-bullet">●</span>
+                        <span class="list-text">{{ improvement }}</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
 
-                <!-- 问题详情 -->
-                <div v-if="currentRecordDetail.questionDetails?.length" class="detail-section">
-                  <h4>问题详情 ({{ currentRecordDetail.questionDetails.length }}题)</h4>
+                <!-- 问答记录详情 -->
+                <div v-if="currentRecordDetail.answers?.length" class="detail-section">
+                  <h4>问答记录 ({{ currentRecordDetail.answers.length }}题)</h4>
                   <div class="question-list">
-                    <div v-for="(q, index) in currentRecordDetail.questionDetails" :key="index" class="question-item">
+                    <div v-for="(answer, index) in currentRecordDetail.answers" :key="index" class="question-item">
                       <div class="question-header">
-                        <span class="question-number">Q{{ index + 1 }}</span>
-                        <span v-if="q.score" class="question-score" :class="getScoreClass(q.score)">{{ q.score }}分</span>
+                        <span class="question-number">Q{{ answer.questionIndex + 1 }}</span>
+                        <span class="question-category">{{ answer.category || '综合' }}</span>
+                        <span v-if="answer.score !== null && answer.score !== undefined" class="question-score" :class="getScoreClass(answer.score)">{{ answer.score }}分</span>
                       </div>
-                      <p class="question-text">{{ q.question }}</p>
-                      <p v-if="q.feedback" class="question-feedback">{{ q.feedback }}</p>
+                      
+                      <!-- 问题 -->
+                      <p class="question-text">{{ answer.question }}</p>
+                      
+                      <!-- 用户回答 -->
+                      <div v-if="answer.userAnswer" class="answer-section">
+                        <div class="answer-label">你的回答：</div>
+                        <p class="answer-text">{{ answer.userAnswer }}</p>
+                      </div>
+                      <div v-else class="answer-section no-answer">
+                        <div class="answer-label">你的回答：</div>
+                        <p class="answer-text">(未回答)</p>
+                      </div>
+                      
+                      <!-- AI评价 -->
+                      <div v-if="answer.feedback" class="feedback-section">
+                        <div class="feedback-label">AI评价：</div>
+                        <p class="feedback-text">{{ answer.feedback }}</p>
+                      </div>
+                      
+                      <!-- 参考答案 -->
+                      <div v-if="answer.referenceAnswer" class="reference-section">
+                        <div class="reference-label">参考答案：</div>
+                        <pre class="reference-text">{{ answer.referenceAnswer }}</pre>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -694,7 +905,15 @@ const deleting = ref(false)
 
 // ==================== Canvas refs ====================
 const miniChartCanvas = ref(null)
-const statsChartCanvas = ref(null)
+const statsChartCanvas = ref(null)  // 用于面试统计的折线图
+
+// ==================== 面试统计新功能 ====================
+const statsResumes = ref([])  // 简历列表
+const statsSelectedResumeId = ref('')  // 选中的简历ID
+const statsInterviewScores = ref([])  // 面试统计数据
+const statsLoading = ref(false)  // 加载状态
+const statsError = ref('')  // 错误信息
+const statsSelectedDimension = ref('')  // 选中的维度（用于折线图）
 
 // ==================== 计算属性：过滤后的面试记录 ====================
 const filteredInterviewRecords = computed(() => {
@@ -795,6 +1014,185 @@ const filteredAnalytics = computed(() => {
     totalCount: filteredRecs.length,
     recs: filteredRecs
   }
+})
+
+// ==================== 计算属性：面试统计新功能（基于后端接口） ====================
+// 转换后端数据为前端格式
+const statsProcessedData = computed(() => {
+  return statsInterviewScores.value.map((score, index) => {
+    const dimensions = {}
+    if (score.scoreQuestionEntity) {
+      score.scoreQuestionEntity.forEach(q => {
+        dimensions[q.category] = q.socre || 0
+      })
+    }
+    return {
+      id: index,
+      overall: score.overallScore || 0,
+      dimensions
+    }
+  })
+})
+
+// 是否有面试统计数据
+const statsHasData = computed(() => statsInterviewScores.value.length > 0)
+
+// 面试次数
+const statsTotalCount = computed(() => statsInterviewScores.value.length)
+
+// 所有面试总分平均分
+const statsAverageScore = computed(() => {
+  if (!statsInterviewScores.value.length) return 0
+  const sum = statsInterviewScores.value.reduce((s, r) => s + (r.overallScore || 0), 0)
+  return Math.round(sum / statsInterviewScores.value.length)
+})
+
+// 最高分
+const statsMaxScore = computed(() => {
+  if (!statsInterviewScores.value.length) return 0
+  return Math.max(...statsInterviewScores.value.map(r => r.overallScore || 0))
+})
+
+// 最低分
+const statsMinScore = computed(() => {
+  if (!statsInterviewScores.value.length) return 0
+  return Math.min(...statsInterviewScores.value.map(r => r.overallScore || 0))
+})
+
+// 所有维度名称
+const statsAllDimensions = computed(() => {
+  const dims = new Set()
+  statsProcessedData.value.forEach(r => {
+    Object.keys(r.dimensions).forEach(d => dims.add(d))
+  })
+  return Array.from(dims)
+})
+
+// 维度平均分
+const statsDimAverages = computed(() => {
+  return statsAllDimensions.value.map(dim => {
+    let sum = 0
+    let count = 0
+    statsProcessedData.value.forEach(r => {
+      if (r.dimensions[dim]) {
+        sum += r.dimensions[dim]
+        count++
+      }
+    })
+    return {
+      name: dim,
+      avg: count ? Math.round(sum / count) : 0
+    }
+  })
+})
+
+// 各维度历史分数（用于折线图）
+const statsDimHistory = computed(() => {
+  const history = {}
+  statsAllDimensions.value.forEach(dim => {
+    history[dim] = statsProcessedData.value.map((r, index) => ({
+      index: index + 1,
+      score: r.dimensions[dim] || 0
+    })).filter(p => p.score > 0)
+  })
+  return history
+})
+
+// 当前选中维度的折线图数据
+const statsSelectedDimData = computed(() => {
+  if (!statsSelectedDimension.value) return []
+  return statsDimHistory.value[statsSelectedDimension.value] || []
+})
+
+// 维度趋势分析
+const statsDimTrend = computed(() => {
+  const data = statsSelectedDimData.value
+  if (data.length < 2) return null
+
+  const first = data[0].score
+  const last = data[data.length - 1].score
+  const diff = last - first
+  const percent = first > 0 ? Math.round((diff / first) * 100) : 0
+
+  if (diff > 0) {
+    return {
+      direction: 'up',
+      text: `较首次提升 ${diff} 分 (+${percent}%)`
+    }
+  } else if (diff < 0) {
+    return {
+      direction: 'down',
+      text: `较首次下降 ${Math.abs(diff)} 分 (${percent}%)`
+    }
+  } else {
+    return {
+      direction: 'flat',
+      text: '与首次持平'
+    }
+  }
+})
+
+// 雷达图数据
+const statsRadarData = computed(() => {
+  const data = statsDimAverages.value
+  const angleStep = (Math.PI * 2) / data.length
+  return data.map((d, index) => {
+    const angle = index * angleStep - Math.PI / 2
+    const radius = (d.avg / 100) * radarMaxRadius
+    return {
+      name: d.name,
+      value: d.avg,
+      angle,
+      radius
+    }
+  })
+})
+
+// 雷达图配置
+const radarSize = 240
+const radarCenter = radarSize / 2
+const radarMaxRadius = 80
+
+// 获取雷达图网格点
+const getRadarGridPoints = (level) => {
+  const radius = (level / 5) * radarMaxRadius
+  const count = statsDimAverages.value.length || 5
+  const angleStep = (Math.PI * 2) / count
+  const points = []
+
+  for (let i = 0; i < count; i++) {
+    const angle = i * angleStep - Math.PI / 2
+    const x = radarCenter + Math.cos(angle) * radius
+    const y = radarCenter + Math.sin(angle) * radius
+    points.push(`${x},${y}`)
+  }
+
+  return points.join(' ')
+}
+
+// 根据角度和半径计算坐标
+const getRadarPoint = (angle, radius) => {
+  return {
+    x: radarCenter + radius * Math.cos(angle),
+    y: radarCenter + radius * Math.sin(angle)
+  }
+}
+
+// 获取标签位置
+const getRadarLabelPosition = (item) => {
+  const labelRadius = radarMaxRadius + 18
+  const point = getRadarPoint(item.angle, labelRadius)
+  return point
+}
+
+// 雷达图数据点字符串
+const radarDataPoints = computed(() => {
+  return statsRadarData.value
+    .map(item => {
+      const point = getRadarPoint(item.angle, item.radius)
+      return `${point.x},${point.y}`
+    })
+    .join(' ')
 })
 
 // ==================== 计算属性：基于面试记录的建议 ====================
@@ -1081,6 +1479,120 @@ const drawStatsChart = () => {
   })
 }
 
+// 绘制维度折线图
+const drawDimensionLineChart = () => {
+  if (!statsChartCanvas.value || statsSelectedDimData.value.length === 0) return
+  
+  const canvas = statsChartCanvas.value
+  const ctx = canvas.getContext('2d')
+  const rect = canvas.parentElement.getBoundingClientRect()
+  canvas.width = rect.width * 2
+  canvas.height = rect.height * 2
+  ctx.scale(2, 2)
+  
+  const width = rect.width
+  const height = rect.height
+  const padding = { top: 20, right: 20, bottom: 30, left: 40 }
+  
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
+  
+  // 清空画布
+  ctx.clearRect(0, 0, width, height)
+  
+  const data = statsSelectedDimData.value
+  
+  // 计算范围
+  const scores = data.map(p => p.score)
+  const minScore = Math.min(...scores, 0)
+  const maxScore = Math.max(...scores, 100)
+  const range = maxScore - minScore || 1
+  
+  // 绘制网格线
+  ctx.strokeStyle = 'rgba(100, 108, 255, 0.1)'
+  ctx.lineWidth = 1
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (i / 4) * chartHeight
+    ctx.beginPath()
+    ctx.moveTo(padding.left, y)
+    ctx.lineTo(width - padding.right, y)
+    ctx.stroke()
+    
+    // Y轴标签
+    const label = Math.round(maxScore - (i / 4) * range)
+    ctx.fillStyle = 'var(--muted)'
+    ctx.font = '10px sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(label, padding.left - 8, y + 3)
+  }
+  
+  // 绘制渐变背景
+  const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom)
+  gradient.addColorStop(0, 'rgba(139, 92, 246, 0.3)')
+  gradient.addColorStop(1, 'rgba(139, 92, 246, 0.05)')
+  
+  // 绘制填充区域
+  ctx.beginPath()
+  ctx.moveTo(padding.left, height - padding.bottom)
+  data.forEach((p, i) => {
+    const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth
+    const y = padding.top + (1 - (p.score - minScore) / range) * chartHeight
+    if (i === 0) ctx.lineTo(x, y)
+    else ctx.lineTo(x, y)
+  })
+  ctx.lineTo(width - padding.right, height - padding.bottom)
+  ctx.closePath()
+  ctx.fillStyle = gradient
+  ctx.fill()
+  
+  // 绘制线条
+  ctx.beginPath()
+  ctx.strokeStyle = '#8b5cf6'
+  ctx.lineWidth = 3
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  data.forEach((p, i) => {
+    const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth
+    const y = padding.top + (1 - (p.score - minScore) / range) * chartHeight
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  })
+  ctx.stroke()
+  
+  // 绘制数据点
+  data.forEach((p, i) => {
+    const x = padding.left + (i / (data.length - 1 || 1)) * chartWidth
+    const y = padding.top + (1 - (p.score - minScore) / range) * chartHeight
+    
+    // 外圈
+    ctx.beginPath()
+    ctx.arc(x, y, 6, 0, Math.PI * 2)
+    ctx.fillStyle = 'var(--bg0)'
+    ctx.fill()
+    ctx.strokeStyle = '#8b5cf6'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    
+    // 内圈
+    ctx.beginPath()
+    ctx.arc(x, y, 3, 0, Math.PI * 2)
+    ctx.fillStyle = '#8b5cf6'
+    ctx.fill()
+    
+    // X轴标签
+    ctx.fillStyle = 'var(--muted)'
+    ctx.font = '10px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(`第${p.index}次`, x, height - padding.bottom + 15)
+  })
+  
+  // 绘制标题
+  ctx.fillStyle = 'var(--text)'
+  ctx.font = 'bold 12px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(`${statsSelectedDimension.value} 分数走势`, width / 2, 15)
+}
+
 // 监听数据变化重绘图表
 watch(() => analytics.value.points, () => {
   nextTick(() => {
@@ -1097,9 +1609,8 @@ watch(() => filteredAnalytics.value.points, () => {
 
 watch(() => activeTab.value, (newTab) => {
   if (newTab === 'stats') {
-    nextTick(() => {
-      drawStatsChart()
-    })
+    // 切换到面试统计标签页时加载简历列表
+    loadStatsResumes()
   }
 })
 
@@ -1115,23 +1626,25 @@ watch(() => props.expanded, (isExpanded) => {
   }
 })
 
+// 监听面试统计数据变化，绘制图表
+watch(() => statsSelectedDimension.value, () => {
+  nextTick(() => {
+    drawDimensionLineChart()
+  })
+})
+
 // ==================== 面试记录 API ====================
 const loadInterviewRecords = async () => {
   loadingRecords.value = true
   try {
-    console.log('开始加载面试记录...')
     // 获取所有简历
     const resumes = await resumeApi.getResumes()
-    console.log('获取到简历列表:', resumes)
     const allInterviews = []
     
     // 遍历每个简历，获取其面试记录
     for (const resume of resumes) {
-      console.log('处理简历:', resume.filename)
       const detail = await resumeApi.getResumeDetail(resume.id)
-      console.log('简历详情:', detail)
       if (detail.interviews && detail.interviews.length > 0) {
-        console.log('找到面试记录:', detail.interviews.length, '条')
         detail.interviews.forEach(interview => {
           allInterviews.push({
             ...interview,
@@ -1139,12 +1652,9 @@ const loadInterviewRecords = async () => {
             resumeFilename: resume.filename
           })
         })
-      } else {
-        console.log('该简历无面试记录')
       }
     }
     
-    console.log('所有面试记录:', allInterviews)
     // 按创建时间倒序排序
     const sortedInterviews = allInterviews.sort((a, b) => {
       const timeA = new Date(a.createdAt || a.startTime || 0).getTime()
@@ -1152,9 +1662,7 @@ const loadInterviewRecords = async () => {
       return timeB - timeA
     })
     
-    console.log('排序后面试记录:', sortedInterviews)
     interviewRecords.value = sortedInterviews
-    console.log('面试记录加载完成，共', sortedInterviews.length, '条')
   } catch (err) {
     console.error('加载面试记录失败:', err)
     interviewRecords.value = []
@@ -1191,6 +1699,47 @@ const loadInterviewDetail = async (sessionId) => {
   } finally {
     loadingDetail.value = false
   }
+}
+
+// ==================== 面试统计新功能 API ====================
+// 加载简历列表（用于面试统计）
+const loadStatsResumes = async () => {
+  try {
+    const data = await resumeApi.getResumes()
+    statsResumes.value = data || []
+    // 如果有简历且未选择，默认选择第一个
+    if (statsResumes.value.length > 0 && !statsSelectedResumeId.value) {
+      statsSelectedResumeId.value = statsResumes.value[0].id
+      await loadStatsData()
+    }
+  } catch (err) {
+    console.error('加载简历列表失败:', err)
+    statsResumes.value = []
+  }
+}
+
+// 加载面试统计数据
+const loadStatsData = async () => {
+  if (!statsSelectedResumeId.value) return
+  
+  statsLoading.value = true
+  statsError.value = ''
+  
+  try {
+    const data = await interviewApi.getInterviewScores(statsSelectedResumeId.value)
+    statsInterviewScores.value = data || []
+  } catch (err) {
+    console.error('加载面试统计数据失败:', err)
+    statsError.value = '加载失败，请重试'
+    statsInterviewScores.value = []
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+// 切换选中的简历
+const onStatsResumeChange = async () => {
+  await loadStatsData()
 }
 
 // ==================== 知识库 API ====================
@@ -1466,6 +2015,12 @@ const getScoreClass = (score) => {
   if (score >= 80) return 'high'
   if (score >= 60) return 'medium'
   return 'low'
+}
+
+const getScoreColor = (score) => {
+  if (score >= 80) return '#10B981'
+  if (score >= 60) return '#F59E0B'
+  return '#EF4444'
 }
 
 onMounted(() => {
@@ -2435,6 +2990,308 @@ onMounted(() => {
   gap: 16px;
 }
 
+/* 选择器通用样式 */
+.selector-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selector-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.selector-icon {
+  font-size: 14px;
+}
+
+.custom-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-input {
+  width: 100%;
+  padding: 10px 36px 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: all 0.2s ease;
+}
+
+.select-input:hover {
+  border-color: var(--stroke2);
+  background: var(--panel2);
+}
+
+.select-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  pointer-events: none;
+  transition: transform 0.2s ease;
+}
+
+.custom-select:focus-within .select-arrow {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--brand);
+}
+
+/* 趋势分析 */
+.trend-analysis {
+  margin-bottom: 12px;
+}
+
+.trend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.trend-item.up {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.trend-item.down {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.trend-item.flat {
+  background: rgba(156, 163, 175, 0.1);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.2);
+}
+
+.trend-icon {
+  font-size: 16px;
+}
+
+.trend-text {
+  flex: 1;
+}
+
+/* 错误状态 */
+.error-state {
+  text-align: center;
+  padding: 20px;
+  color: #ef4444;
+}
+
+.error-state .retry-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--brand);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+
+.empty-state .sub-text {
+  font-size: 12px;
+  color: var(--muted2);
+  margin-top: 8px;
+}
+
+/* 能力维度进度条 */
+.dim-progress {
+  height: 8px;
+  background: var(--stroke);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dim-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* 雷达图区域 */
+.radar-section {
+  background: var(--bg0);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.radar-container {
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.radar-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 220px;
+  max-height: 220px;
+}
+
+.radar-svg .grid-line {
+  fill: none;
+  stroke: var(--stroke);
+  stroke-width: 1;
+}
+
+.radar-svg .axis-line {
+  stroke: var(--stroke);
+  stroke-width: 1;
+}
+
+.radar-svg .data-area {
+  fill: url(#radarGradient);
+  fill-opacity: 0.6;
+}
+
+.radar-svg .data-border {
+  stroke: #6366f1;
+  stroke-width: 2;
+}
+
+.radar-svg .data-point {
+  fill: #6366f1;
+  stroke: var(--bg0);
+  stroke-width: 2;
+}
+
+.radar-svg .axis-label {
+  font-size: 10px;
+  fill: var(--text);
+}
+
+.radar-svg .value-label {
+  font-size: 9px;
+  fill: #6366f1;
+  font-weight: bold;
+}
+
+/* 折线图区域 */
+.line-chart-section {
+  background: var(--bg0);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.line-chart-container {
+  height: 150px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.line-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.select-prompt {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 面试记录明细 */
+.records-detail {
+  background: var(--bg0);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.records-list .record-item {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.records-list .record-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.records-list .record-index {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.records-list .record-score {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.records-list .record-dims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.records-list .dim-tag {
+  padding: 4px 8px;
+  background: var(--bg0);
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* 时间范围切换 */
 .time-range-switcher {
   display: flex;
@@ -2731,15 +3588,15 @@ onMounted(() => {
 .detail-view {
   height: 100%;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px 16px 16px;
+  position: relative;
 }
 
 .back-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  margin-bottom: 16px;
+  padding: 6px 14px;
   background: var(--panel);
   border: 1px solid var(--stroke);
   border-radius: 20px;
@@ -2748,6 +3605,11 @@ onMounted(() => {
   color: var(--muted);
   cursor: pointer;
   transition: all 0.2s ease;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  margin-bottom: 8px;
 }
 
 .back-btn:hover {
@@ -2811,18 +3673,112 @@ onMounted(() => {
   font-weight: 600;
 }
 
-/* 详情区块 */
-.detail-section {
-  margin-bottom: 24px;
+/* 顶部分数圆环 */
+.score-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0 16px;
+  margin-bottom: 12px;
 }
 
-.detail-section h4 {
-  font-size: 14px;
-  font-weight: 600;
+.score-ring-container {
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+.score-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  stroke: var(--stroke);
+}
+
+.ring-fill {
+  transition: stroke-dashoffset 0.8s ease;
+}
+
+.score-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-content .score-value {
+  font-size: 36px;
+  font-weight: 800;
   color: var(--text);
-  margin: 0 0 12px;
-  padding-bottom: 8px;
+  line-height: 1;
+}
+
+.score-content .score-label {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* 详情区块 - 新设计 */
+.detail-section {
+  margin-bottom: 20px;
+  background: var(--panel);
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--panel) 0%, var(--panel2) 100%);
   border-bottom: 1px solid var(--stroke);
+}
+
+.section-header.strengths-header {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-bottom: 2px solid rgba(16, 185, 129, 0.3);
+}
+
+.section-header.improvements-header {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border-bottom: 2px solid rgba(245, 158, 11, 0.3);
+}
+
+.section-icon {
+  font-size: 20px;
+}
+
+.section-header h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.section-content {
+  padding: 16px 20px;
+}
+
+/* 反馈区域特殊样式 */
+.feedback-section-card .section-content {
+  background: linear-gradient(135deg, rgba(123, 104, 166, 0.05) 0%, transparent 100%);
+}
+
+/* 能力维度 */
+.dimensions-section .section-header {
+  background: linear-gradient(135deg, rgba(91, 141, 184, 0.1) 0%, rgba(91, 141, 184, 0.05) 100%);
+  border-bottom: 2px solid rgba(91, 141, 184, 0.3);
 }
 
 /* 能力维度 */
@@ -2887,21 +3843,45 @@ onMounted(() => {
   margin: 0;
 }
 
-/* 列表样式 */
+/* 列表样式 - 新设计 */
 .detail-list {
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
 }
 
 .detail-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--text);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  padding: 8px 0;
 }
 
 .detail-list li:last-child {
   margin-bottom: 0;
+}
+
+.list-bullet {
+  flex-shrink: 0;
+  font-size: 8px;
+  color: var(--brand);
+  margin-top: 6px;
+}
+
+.strengths-list .list-bullet {
+  color: #10B981;
+}
+
+.improvements-list .list-bullet {
+  color: #F59E0B;
+}
+
+.list-text {
+  flex: 1;
 }
 
 /* 问题列表 */
@@ -2954,6 +3934,97 @@ onMounted(() => {
   color: var(--muted);
   margin: 0;
   line-height: 1.5;
+}
+
+/* 问答记录样式 */
+.question-category {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.answer-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg1);
+  border-radius: 8px;
+  border-left: 3px solid var(--brand);
+}
+
+.answer-section.no-answer {
+  border-left-color: var(--muted);
+  opacity: 0.7;
+}
+
+.answer-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand);
+  margin-bottom: 6px;
+}
+
+.answer-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.feedback-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 8px;
+  border-left: 3px solid #ffc107;
+}
+
+.feedback-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffc107;
+  margin-bottom: 6px;
+}
+
+.feedback-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.reference-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 8px;
+  border-left: 3px solid #4caf50;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.reference-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4caf50;
+  margin-bottom: 6px;
+}
+
+.reference-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* 滚动条样式 */

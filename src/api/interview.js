@@ -179,6 +179,25 @@ export const interviewApi = {
     return request.get(`/api/interview/sessions/${sessionId}/export`, {
       responseType: 'blob'
     })
+  },
+
+  /**
+   * 获取每日一题
+   * GET /api/interview/sessions/getquestion/
+   * @returns {Promise<TestQuestionEntity>}
+   */
+  async getDailyQuestion() {
+    return request.get('/api/interview/sessions/getquestion/')
+  },
+
+  /**
+   * 获取面试分数统计
+   * GET /api/interview/sessions/getscores/{resumeId}
+   * @param {number} resumeId
+   * @returns {Promise<Array<{overallScore: number, scoreQuestionEntity: Array<{category: string, socre: number}>}>>}
+   */
+  async getInterviewScores(resumeId) {
+    return request.get(`/api/interview/sessions/getscores/${resumeId}`)
   }
 }
 

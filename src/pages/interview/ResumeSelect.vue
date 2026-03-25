@@ -67,9 +67,9 @@
       <button
         class="btn primary"
         :disabled="!selectedResume"
-        @click="goToSettings"
+        @click="goToKnowledgeBase"
       >
-        下一步：面试设置
+        下一步：选择知识库
       </button>
     </div>
 
@@ -276,9 +276,9 @@ const uploadResume = async (file) => {
 }
 
 // 前往知识库选择
-const goToSettings = () => {
+const goToKnowledgeBase = () => {
   if (!selectedResume.value) return
-  
+
   // 将选中的简历信息存储到 localStorage
   localStorage.setItem('selectedResume', JSON.stringify({
     id: selectedResume.value.id,
@@ -286,7 +286,7 @@ const goToSettings = () => {
     fileSize: selectedResume.value.fileSize,
     uploadedAt: selectedResume.value.uploadedAt
   }))
-  
+
   router.push('/app/home/interview/knowledgebase-select')
 }
 

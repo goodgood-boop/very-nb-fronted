@@ -11,6 +11,43 @@
         <span>返回</span>
       </button>
     </div>
+    
+    <!-- 退出面试确认弹窗 -->
+    <div v-if="showExitConfirmDialog" class="exit-confirm-modal" @click.self="cancelExit">
+      <div class="exit-confirm-content">
+        <div class="exit-confirm-header">
+          <div class="warning-icon">⚠️</div>
+          <h3>确认退出面试？</h3>
+        </div>
+        <div class="exit-confirm-body">
+          <p class="exit-confirm-desc">
+            您当前正在面试中，退出前请选择：
+          </p>
+          <div class="exit-options">
+            <div class="exit-option warning">
+              <div class="option-title">📝 提前交卷</div>
+              <div class="option-desc">提交已回答的题目，生成面试报告</div>
+            </div>
+            <div class="exit-option info">
+              <div class="option-title">💾 暂存退出</div>
+              <div class="option-desc">保存当前进度，下次可以继续面试</div>
+            </div>
+          </div>
+        </div>
+        <div class="exit-confirm-footer">
+          <button class="exit-btn cancel" @click="cancelExit" :disabled="isSubmittingInterview">
+            继续面试
+          </button>
+          <button class="exit-btn save" @click="saveAndExit" :disabled="isSubmittingInterview">
+            暂存退出
+          </button>
+          <button class="exit-btn submit" @click="confirmEarlySubmit" :disabled="isSubmittingInterview">
+            {{ isSubmittingInterview ? '提交中...' : '提前交卷' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    
     <!-- 根据是否有子路由显示不同内容 -->
     <router-view 
       v-if="$route.path !== '/app/home'" 
@@ -26,7 +63,7 @@
     
     <!-- 卡片视图（没有子路由时显示） -->
     <div v-else class="cards-container" :class="{ 'hovering-container': isContainerHovered }">
-      <!-- 卡片1：开始面试 -->
+      <!-- 卡片1：开始面试 + 学习计划 -->
       <div 
         ref="card0"
         class="card card-3d card-interview"
@@ -39,34 +76,52 @@
         @mouseenter="handleCardEnter(0, $event)"
         @mouseleave="handleCardLeave(0)"
         @mousemove="handleCardMove(0, $event)"
-        @click="goToInterview"
       >
         <div class="card-shine"></div>
-        <div class="card-content">
-          <div class="card-icon">🎯</div>
-          <h3 class="card-title">开始面试</h3>
-          <p class="card-subtitle">模拟真实面试环境</p>
-          
-          <!-- 展开时显示更多内容 -->
-          <Transition name="fade">
-            <div v-if="hoveredCard === 0" class="card-details">
-              <div class="detail-item">
-                <span class="detail-label">岗位：</span>
-                <span class="detail-value">前端/后端/算法</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">时长：</span>
-                <span class="detail-value">30-45分钟</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">难度：</span>
-                <span class="detail-value">自适应</span>
-              </div>
-              <div class="card-buttons">
-                <button class="card-btn primary">立即开始</button>
+        <div class="card-content split-card">
+          <!-- 上半部分：开始面试 -->
+          <div class="card-half top" @click="goToInterview">
+            <div class="half-content">
+              <div class="card-icon-large">🎯</div>
+              <h3 class="card-title">开始面试</h3>
+              <p class="card-subtitle">模拟真实面试环境，提升实战能力</p>
+              
+              <!-- 快捷统计 -->
+              <div class="quick-stats">
+                <div class="quick-stat">
+                  <span class="quick-stat-value">{{ interviewCount }}</span>
+                  <span class="quick-stat-label">已完成</span>
+                </div>
+                <div class="quick-stat-divider"></div>
+                <div class="quick-stat">
+                  <span class="quick-stat-value">3</span>
+                  <span class="quick-stat-label">岗位类型</span>
+                </div>
               </div>
             </div>
-          </Transition>
+          </div>
+          
+          <!-- 下半部分：学习计划 -->
+          <div class="card-half bottom" @click="goToStudyPlan">
+            <div class="half-content">
+              <div class="card-icon-large">📚</div>
+              <h3 class="card-title">学习计划</h3>
+              <p class="card-subtitle">复习错题，巩固知识</p>
+              
+              <!-- 学习统计 -->
+              <div class="quick-stats">
+                <div class="quick-stat">
+                  <span class="quick-stat-value">{{ studyProgress }}%</span>
+                  <span class="quick-stat-label">完成度</span>
+                </div>
+                <div class="quick-stat-divider"></div>
+                <div class="quick-stat">
+                  <span class="quick-stat-value">{{ studyCount }}</span>
+                  <span class="quick-stat-label">待复习</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -188,6 +243,13 @@ const cardRotations = ref([
 
 // 获取卡片的3D样式
 const getCardStyle = (index) => {
+  // 只有当鼠标在当前卡片上时才应用3D旋转效果
+  if (hoveredCard.value !== index) {
+    return {
+      '--shine-x': '50%',
+      '--shine-y': '50%'
+    }
+  }
   const rot = cardRotations.value[index]
   return {
     transform: `perspective(1000px) rotateX(${rot.x}deg) rotateY(${rot.y}deg) scale3d(1, 1, 1)`,
@@ -204,11 +266,11 @@ const handleCardEnter = (index, event) => {
 // 处理鼠标离开卡片
 const handleCardLeave = (index) => {
   hoveredCard.value = null
-  // 重置旋转
-  cardRotations.value[index] = { x: 0, y: 0, shineX: 50, shineY: 50 }
+  // 注意：不在此处重置旋转状态，让CSS过渡来处理平滑复位
+  // 当鼠标离开卡片时，getCardStyle不再应用transform，CSS会自动过渡回默认状态
 }
 
-// 处理鼠标在卡片上移动
+// 处理鼠标在卡片上移动 - 直接更新确保即时响应
 const handleCardMove = (index, event) => {
   const card = cardRefs[index].value
   if (!card) return
@@ -220,7 +282,7 @@ const handleCardMove = (index, event) => {
   const centerX = rect.width / 2
   const centerY = rect.height / 2
   
-  // 计算旋转角度（最大8度，更 subtle）
+  // 计算旋转角度（最大8度，恢复原来的角度）
   const rotateX = ((y - centerY) / centerY) * -8
   const rotateY = ((x - centerX) / centerX) * 8
   
@@ -228,6 +290,7 @@ const handleCardMove = (index, event) => {
   const shineX = (x / rect.width) * 100
   const shineY = (y / rect.height) * 100
   
+  // 直接更新状态，确保即时响应鼠标移动
   cardRotations.value[index] = {
     x: rotateX,
     y: rotateY,
@@ -237,6 +300,68 @@ const handleCardMove = (index, event) => {
 }
 // 返回主页卡片视图
 const goBackToHome = () => {
+  // 检查是否在面试房间页面
+  if (route.path.includes('/interview/room')) {
+    // 检查是否有正在进行的面试
+    const interviewConfig = localStorage.getItem('interviewConfig')
+    if (interviewConfig) {
+      const config = JSON.parse(interviewConfig)
+      // 检查是否已经完成所有题目
+      const currentIndex = config.currentQuestionIndex || 0
+      const totalQuestions = config.questions?.length || 0
+      
+      if (currentIndex < totalQuestions - 1) {
+        // 面试未完成，显示确认弹窗
+        showExitConfirmDialog.value = true
+        return
+      }
+    }
+  }
+  router.push('/app/home')
+}
+
+// 退出面试确认弹窗状态
+const showExitConfirmDialog = ref(false)
+const isSubmittingInterview = ref(false)
+
+// 确认提前交卷
+const confirmEarlySubmit = async () => {
+  isSubmittingInterview.value = true
+  try {
+    const interviewConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
+    const sessionId = interviewConfig.sessionId
+    
+    if (sessionId && !sessionId.startsWith('local_')) {
+      // 调用后端提前交卷接口
+      const { interviewApi } = await import('../../api/interview.js')
+      await interviewApi.completeInterview(sessionId)
+    }
+    
+    // 清除面试配置
+    localStorage.removeItem('interviewConfig')
+    localStorage.removeItem('interviewSettings')
+    
+    // 跳转到学习计划页面（面试结果）
+    router.push(`/app/home/study-plan?sessionId=${sessionId}`)
+  } catch (error) {
+    console.error('提前交卷失败:', error)
+    alert('提前交卷失败，请稍后重试')
+  } finally {
+    isSubmittingInterview.value = false
+    showExitConfirmDialog.value = false
+  }
+}
+
+// 取消退出，保持未完成状态
+const cancelExit = () => {
+  showExitConfirmDialog.value = false
+  // 面试保持未完成状态，用户可以继续
+}
+
+// 暂存退出 - 保持面试未完成状态，下次可以继续
+const saveAndExit = () => {
+  // 面试配置已经保存在 localStorage 中，直接返回主页即可
+  showExitConfirmDialog.value = false
   router.push('/app/home')
 }
 
@@ -249,6 +374,8 @@ const resumeCount = ref(0)
 const interviewCount = ref(0)
 const knowledgeCount = ref(0)
 const lastAnalysisTime = ref('')
+const studyProgress = ref(0)
+const studyCount = ref(0)
 
 // 处理子组件的全屏事件
 const handleChildFullscreen = (value) => {
@@ -310,6 +437,11 @@ const goToQA = (event) => {
 const goToResumes = (event) => {
   saveClickPosition(event)
   router.push('/app/home/resumes')
+}
+
+const goToStudyPlan = (event) => {
+  saveClickPosition(event)
+  router.push('/app/home/study-plan')
 }
 
 onMounted(() => {
@@ -374,7 +506,8 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   padding: 16px;
-  transition: gap 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 使用contain属性优化性能，避免重排影响其他元素 */
+  contain: layout style;
 }
 
 /* 中间栏悬停时，卡片间距拉大 */
@@ -389,7 +522,14 @@ onMounted(() => {
   border-radius: 20px;
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 统一过渡时间和缓动函数，确保动画同步流畅 */
+  transition: 
+    flex 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s ease-out,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease;
   cursor: pointer;
   overflow: hidden;
   position: relative;
@@ -398,7 +538,6 @@ onMounted(() => {
 /* 3D卡片样式 */
 .card-3d {
   transform-style: preserve-3d;
-  transition: transform 0.1s ease-out, box-shadow 0.3s ease, border-color 0.3s ease;
   will-change: transform;
 }
 
@@ -596,10 +735,114 @@ onMounted(() => {
   color: var(--text);
 }
 
-/* 卡片详情（展开时显示） */
-.card-details {
+/* ===== 新的开始面试卡片样式（上下分栏） ===== */
+.split-card {
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   width: 100%;
-  margin-top: 12px;
+}
+
+.card-half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+  min-height: 50%;
+}
+
+.card-half.top {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-half.top:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.card-half.bottom {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.card-half.bottom:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.half-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+
+.card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.card-icon-large {
+  font-size: 48px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.card.expanded .card-icon-large {
+  transform: scale(1.15);
+}
+
+/* 快捷统计 */
+.quick-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.quick-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.quick-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--brand);
+  line-height: 1;
+}
+
+.quick-stat-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.quick-stat-divider {
+  width: 1px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 展开时的操作区域 */
+.card-actions-expanded {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 16px;
   animation: slideUp 0.3s ease-out;
 }
 
@@ -612,6 +855,95 @@ onMounted(() => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.action-btn-main {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.action-btn-main:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+}
+
+.btn-icon {
+  font-size: 14px;
+}
+
+/* 次要操作区域 */
+.secondary-actions {
+  margin-top: 12px;
+}
+
+.secondary-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondary-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateX(4px);
+}
+
+.sec-icon {
+  font-size: 20px;
+}
+
+.sec-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sec-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sec-desc {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sec-arrow {
+  font-size: 14px;
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.secondary-action:hover .sec-arrow {
+  transform: translateX(4px);
+  color: var(--text);
+}
+
+/* 卡片详情（展开时显示） */
+.card-details {
+  width: 100%;
+  margin-top: 12px;
+  animation: slideUp 0.3s ease-out;
 }
 
 .detail-item {
@@ -681,11 +1013,176 @@ onMounted(() => {
 /* 确保子页面占满整个中栏 */
 .middle-column :deep(.interview-room),
 .middle-column :deep(.knowledge-chat-page),
-.middle-column :deep(.resume-list-page) {
+.middle-column :deep(.resume-list-page),
+.middle-column :deep(.study-plan-page) {
   height: 100%;
   width: 100%;
-  padding: 0;
+  padding: 60px 0 0 0;  /* 给返回按钮留出空间 */
   overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* 退出面试确认弹窗 */
+.exit-confirm-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.exit-confirm-content {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 20px;
+  padding: 28px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.exit-confirm-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.exit-confirm-header .warning-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.exit-confirm-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.exit-confirm-body {
+  margin-bottom: 24px;
+}
+
+.exit-confirm-desc {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.exit-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exit-option {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+}
+
+.exit-option.warning {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.exit-option.info {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.option-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.exit-option.warning .option-title {
+  color: #ef4444;
+}
+
+.exit-option.info .option-title {
+  color: #3b82f6;
+}
+
+.option-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.exit-confirm-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.exit-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--stroke);
+}
+
+.exit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.exit-btn.cancel {
+  background: var(--panel2);
+  color: var(--text);
+}
+
+.exit-btn.cancel:hover:not(:disabled) {
+  background: var(--bg1);
+}
+
+.exit-btn.save {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+}
+
+.exit-btn.save:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.exit-btn.submit {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+
+.exit-btn.submit:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
 }
 
 /* 淡入淡出动画 */
@@ -720,6 +1217,14 @@ onMounted(() => {
   
   .card.compressed {
     flex: 0.8;
+  }
+  
+  .exit-confirm-footer {
+    flex-direction: column;
+  }
+  
+  .exit-btn {
+    width: 100%;
   }
 }
 </style>

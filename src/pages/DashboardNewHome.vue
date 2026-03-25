@@ -110,6 +110,7 @@ const handleRightHover = (value) => {
     rightHover.value = false
   }
 }
+
 // 全屏状态
 const isFullscreen = ref(false)
 
@@ -235,19 +236,14 @@ const middleWidth = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: var(--muted2);
+  color: var(--muted);
   font-size: 14px;
 }
 
-.placeholder-content h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.placeholder-content p {
-  margin: 4px 0;
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
 }
 
 /* 自定义滚动条 */
@@ -266,28 +262,5 @@ const middleWidth = computed(() => {
 
 .column-content::-webkit-scrollbar-thumb:hover {
   background: var(--stroke2);
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .columns-container {
-    padding: 12px;
-    gap: 12px;
-  }
-  
-  .column {
-    border-radius: 16px;
-  }
-}
-
-@media (max-width: 480px) {
-  .columns-container {
-    padding: 8px;
-    gap: 8px;
-  }
-  
-  .column {
-    border-radius: 12px;
-  }
 }
 </style>

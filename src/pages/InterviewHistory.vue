@@ -375,17 +375,26 @@
                   </div>
 
                   <!-- 学习计划 -->
-                  <div v-if="currentInterview.learningPlan && currentInterview.learningPlan.length > 0" class="detail-section-card">
+                  <div v-if="currentInterview.learningPlan && currentInterview.learningPlan.length > 0" class="detail-section-card learning-plan-card">
                     <div class="detail-section-header info">
                       <BookOpen width="18" height="18" />
                       <h4>学习计划</h4>
                     </div>
+                    <p class="learning-plan-desc">
+                      <Lightbulb width="14" height="14" />
+                      根据您的面试回答，我们从知识库中找出了能帮助您提升的知识点
+                    </p>
                     <ul class="detail-section-list">
                       <li v-for="(plan, i) in currentInterview.learningPlan" :key="i">
                         <span class="detail-list-dot info"></span>
                         <span>{{ plan }}</span>
                       </li>
                     </ul>
+                    <button class="btn-go-study" @click="goToStudyPlan(currentInterview)">
+                      <GraduationCap width="16" height="16" />
+                      <span>前往学习这些知识点</span>
+                      <ChevronRight width="16" height="16" />
+                    </button>
                   </div>
                 </div>
 
@@ -476,7 +485,6 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  Search,
   X,
   CheckCircle2,
   AlertTriangle,
@@ -484,7 +492,9 @@ import {
   ChevronDown,
   User,
   Bot,
-  BookOpen
+  BookOpen,
+  Lightbulb,
+  GraduationCap
 } from 'lucide-vue-next'
 import { MotionDiv } from '../components/motion'
 import VirtualList from '../components/VirtualList.vue'
@@ -771,6 +781,15 @@ const handleDelete = async () => {
 // 返回
 const goBack = () => {
   router.push('/app/home')
+}
+
+// 跳转到学习计划页面
+const goToStudyPlan = (interview) => {
+  closeDetailModal()
+  router.push({
+    path: '/app/study-plan',
+    query: { sessionId: interview.sessionId }
+  })
 }
 
 // 格式化日期
@@ -1745,6 +1764,55 @@ watch(() => route.path, (newPath, oldPath) => {
 
 .detail-list-dot.info {
   background: #3b82f6;
+}
+
+/* 学习计划卡片样式 */
+.learning-plan-card {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+}
+
+.learning-plan-desc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #0369a1;
+  margin: 0 0 12px 0;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+}
+
+.btn-go-study {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-go-study:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.btn-go-study svg:last-child {
+  transition: transform 0.2s ease;
+}
+
+.btn-go-study:hover svg:last-child {
+  transform: translateX(4px);
 }
 
 .detail-questions-section {

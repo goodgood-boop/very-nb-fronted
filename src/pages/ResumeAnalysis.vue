@@ -223,40 +223,46 @@
 
                 <!-- 雷达图 -->
                 <div class="radar-chart-container">
-                  <RadarChart :data="radarData" />
+                  <RadarChart v-if="radarData.length > 0" :data="radarData" />
+                  <div v-else class="radar-loading">暂无评分数据 (radarData: {{ radarData }})</div>
                 </div>
 
                 <!-- 维度得分详情 -->
                 <div class="dimension-scores">
-                  <ScoreProgressBar
-                    label="项目经验"
-                    :score="latestAnalysis.projectScore || 0"
-                    :maxScore="40"
-                    color="purple"
-                  />
-                  <ScoreProgressBar
-                    label="技能匹配"
-                    :score="latestAnalysis.skillMatchScore || 0"
-                    :maxScore="20"
-                    color="blue"
-                  />
+                  <div class="debug-info" style="color: red; font-size: 12px; margin-bottom: 10px;">
+                    latestAnalysis: {{ latestAnalysis ? '有值' : '无值' }}<br>
+                    contentScore: {{ latestAnalysis?.contentScore }}<br>
+                    structureScore: {{ latestAnalysis?.structureScore }}
+                  </div>
                   <ScoreProgressBar
                     label="内容完整性"
-                    :score="latestAnalysis.contentScore || 0"
-                    :maxScore="15"
+                    :score="latestAnalysis?.contentScore || 0"
+                    :maxScore="25"
                     color="emerald"
                   />
                   <ScoreProgressBar
                     label="结构清晰度"
-                    :score="latestAnalysis.structureScore || 0"
-                    :maxScore="15"
+                    :score="latestAnalysis?.structureScore || 0"
+                    :maxScore="20"
                     color="cyan"
                   />
                   <ScoreProgressBar
+                    label="技能匹配度"
+                    :score="latestAnalysis?.skillMatchScore || 0"
+                    :maxScore="25"
+                    color="blue"
+                  />
+                  <ScoreProgressBar
                     label="表达专业性"
-                    :score="latestAnalysis.expressionScore || 0"
-                    :maxScore="10"
+                    :score="latestAnalysis?.expressionScore || 0"
+                    :maxScore="15"
                     color="orange"
+                  />
+                  <ScoreProgressBar
+                    label="项目经验"
+                    :score="latestAnalysis?.projectScore || 0"
+                    :maxScore="15"
+                    color="purple"
                   />
                 </div>
               </div>
@@ -695,15 +701,18 @@ const analyzeFailed = computed(() => {
 })
 
 const radarData = computed(() => {
-  if (!latestAnalysis.value) return []
-  
-  return [
-    { subject: '表达专业性', score: latestAnalysis.value.expressionScore || 0, fullMark: 10 },
-    { subject: '技能匹配', score: latestAnalysis.value.skillMatchScore || 0, fullMark: 20 },
-    { subject: '内容完整性', score: latestAnalysis.value.contentScore || 0, fullMark: 15 },
-    { subject: '结构清晰度', score: latestAnalysis.value.structureScore || 0, fullMark: 15 },
-    { subject: '项目经验', score: latestAnalysis.value.projectScore || 0, fullMark: 40 }
+  if (!latestAnalysis.value) {
+    return []
+  }
+
+  const data = [
+    { subject: '内容完整性', score: latestAnalysis.value.contentScore || 0, fullMark: 25 },
+    { subject: '结构清晰度', score: latestAnalysis.value.structureScore || 0, fullMark: 20 },
+    { subject: '技能匹配度', score: latestAnalysis.value.skillMatchScore || 0, fullMark: 25 },
+    { subject: '表达专业性', score: latestAnalysis.value.expressionScore || 0, fullMark: 15 },
+    { subject: '项目经验', score: latestAnalysis.value.projectScore || 0, fullMark: 15 }
   ]
+  return data
 })
 
 const suggestionsByPriority = computed(() => {

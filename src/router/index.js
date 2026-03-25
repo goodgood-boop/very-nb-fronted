@@ -10,6 +10,8 @@ import InterviewHistory from '../pages/InterviewHistory.vue'
 import ResumeSelect from '../pages/interview/ResumeSelect.vue'
 import KnowledgeBaseSelect from '../pages/interview/KnowledgeBaseSelect.vue'
 import InterviewSettings from '../pages/interview/InterviewSettings.vue'
+import InterviewLoading from '../pages/interview/InterviewLoading.vue'
+import InterviewReportLoading from '../pages/interview/InterviewReportLoading.vue'
 import ResumeUpload from '../pages/ResumeUpload.vue'
 import ResumeAnalysis from '../pages/ResumeAnalysis.vue'
 import ResumeList from '../pages/ResumeList.vue'
@@ -20,6 +22,7 @@ import Profile from '../pages/Profile.vue'
 import Settings from '../pages/Settings.vue'
 import KnowledgeBase from '../pages/KnowledgeBase.vue'
 import KnowledgeBaseChat from '../pages/KnowledgeBaseChat.vue'
+import StudyPlan from '../pages/study/StudyPlan.vue'
 import NotFound from '../pages/NotFound.vue'
 
 const router = createRouter({
@@ -66,6 +69,16 @@ const router = createRouter({
       meta: { title: '面试房间' }
     },
     {
+      path: 'interview/loading',
+      component: InterviewLoading,
+      meta: { title: '准备面试' }
+    },
+    {
+      path: 'interview/report-loading',
+      component: InterviewReportLoading,
+      meta: { title: '生成面试报告' }
+    },
+    {
       path: 'qa',
       component: KnowledgeBaseChat,
       meta: { title: '问答助手' }
@@ -74,6 +87,11 @@ const router = createRouter({
       path: 'resumes',
       component: ResumeList,
       meta: { title: '简历库' }
+    },
+    {
+      path: 'study-plan',
+      component: StudyPlan,
+      meta: { title: '学习计划' }
     }
   ]
 },

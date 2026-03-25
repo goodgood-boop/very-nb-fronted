@@ -5,6 +5,7 @@
         <!-- 在这里添加按钮组 -->
       <div class="avatar-header">
         <div class="button-group">
+          <button class="icon-btn" @click="unlock" title="解锁音频">🔊</button>
           <FullscreenButton 
             v-model="isFullscreen"
             @toggle="onFullscreenToggle"
@@ -50,8 +51,24 @@
             :class="m.role"
           >
             <div class="message-bubble" :class="m.role">
-              <div class="message-sender">{{ m.role === 'interviewer' ? '面试官' : '我' }}</div>
+              <div class="message-header">
+                <span class="message-sender">{{ m.role === 'interviewer' ? '面试官' : '我' }}</span>
+                <span v-if="m.role === 'interviewer' && m.questionType" class="question-type-tag" :class="m.isFollowUp ? 'follow-up' : 'main'">
+                  {{ m.isFollowUp ? `追问问题${m.followUpIndex || ''}` : `主问题${m.mainIndex || ''}` }}
+                </span>
+              </div>
               <div class="message-text">{{ m.text }}</div>
+              <!-- 语音输入的ASR分数显示 -->
+              <div v-if="m.role === 'candidate' && m.voiceAnalysis" class="voice-scores">
+                <span class="score-tag confidence">
+                  <span class="score-icon">🎯</span>
+                  自信度: {{ m.voiceAnalysis.confidenceScore }}/10
+                </span>
+                <span class="score-tag clarity">
+                  <span class="score-icon">🎤</span>
+                  清晰度: {{ m.voiceAnalysis.clarityScore }}/10
+                </span>
+              </div>
             </div>
           </div>
           <div v-if="allMessages.length === 0" class="chat-placeholder">
@@ -186,6 +203,43 @@
       </div>
     </Modal>
 
+    <!-- 退出面试确认对话框 -->
+    <Modal
+      :open="showExitConfirm"
+      title="确认退出面试"
+      subtitle="您可以选择提前交卷或暂时退出，暂时退出后可以在下次继续"
+      @close="showExitConfirm = false"
+    >
+      <div class="card soft" style="padding:20px;">
+        <p style="margin-bottom: 20px; color: #64748b; line-height: 1.6;">
+          <strong>提前交卷：</strong>结束本次面试并生成评价报告<br>
+          <strong>暂时退出：</strong>保存当前进度，下次可以继续答题
+        </p>
+        <div class="row gap10" style="justify-content: flex-end;">
+          <button 
+            class="btn ghost" 
+            @click="showExitConfirm = false"
+          >
+            取消
+          </button>
+          <button 
+            class="btn warning" 
+            @click="handleTempExit"
+            :disabled="isExiting"
+          >
+            {{ isExiting ? '保存中...' : '暂时退出' }}
+          </button>
+          <button 
+            class="btn primary" 
+            @click="finishInterview"
+            :disabled="isSubmitting"
+          >
+            {{ isSubmitting ? '提交中...' : '提前交卷' }}
+          </button>
+        </div>
+      </div>
+    </Modal>
+
     <!-- 未完成面试提示对话框 -->
     <Modal
       :open="showUnfinishedDialog"
@@ -294,6 +348,29 @@
         </button>
       </template>
     </Modal>
+
+    <!-- 面试评价生成成功提示弹窗 -->
+    <Modal
+      :open="showEvaluationSuccessModal"
+      title="面试完成"
+      @close="closeEvaluationSuccessModal"
+    >
+      <div class="evaluation-success-content">
+        <div class="success-icon">🎉</div>
+        <h3 class="success-title">面试评价生成成功！</h3>
+        <p class="success-message">
+          您可以在面试记录里面查看详细评价
+        </p>
+        <p class="success-hint">
+          💡 记得查看为您准备的个性化学习计划哦
+        </p>
+      </div>
+      <template #footer>
+        <button class="btn primary" @click="closeEvaluationSuccessModal">
+          去查看
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -303,7 +380,6 @@ import { useRouter, useRoute } from 'vue-router'
 import Modal from '../components/ui/Modal.vue'
 import Live2DAvatar from '../components/Live2DAvatar.vue'
 import FullscreenButton from '../components/home/FullscreenButton.vue'  // 添加这行
-import { QUESTION_BANK } from '../lib/mockQuestions'
 import { addRecord, labelType } from '../lib/records'
 import { interviewApi } from '../api/interview.js'
 
@@ -401,6 +477,9 @@ const interviewDetail = ref(null)
 const interviewDetailLoading = ref(false)
 const interviewDetailError = ref(null)
 
+// 面试评价生成成功提示弹窗
+const showEvaluationSuccessModal = ref(false)
+
 // 面试题与对话
 const transcript = ref([]) // { id, role:'interviewer'|'candidate', text }
 
@@ -418,10 +497,42 @@ const currentQuestion = computed(() => {
   return currentQuestionObj.value.question || '请做一个自我介绍。'
 })
 
-// 进度百分比 - 完全按照 EchoMind-feature- 计算
+// 进度百分比 - 基于主问题数量计算（不包括追问）
 const progressPercent = computed(() => {
-  if (!interviewSession.value.questions.length || !currentQuestionObj.value.question) return 0
-  return ((currentQuestionObj.value.questionIndex + 1) / interviewSession.value.questions.length) * 100
+  // 计算主问题数量（isFollowUp为false的问题）
+  const mainQuestions = interviewSession.value.questions.filter(q => !q.isFollowUp)
+  const mainQuestionCount = mainQuestions.length
+  
+  if (!mainQuestionCount || !currentQuestionObj.value.question) return 0
+  
+  // 当前是主问题还是追问
+  const currentQ = currentQuestionObj.value
+  const isFollowUp = currentQ.isFollowUp || (currentQ.addQuestionIndex > 0)
+  
+  // 如果是追问，使用对应的主问题索引；如果是主问题，使用当前索引
+  let currentMainIndex
+  if (isFollowUp) {
+    // 追问问题，找到对应的主问题在mainQuestions数组中的索引
+    const parentIndex = currentQ.mainQuestionIndex !== undefined ? currentQ.mainQuestionIndex : currentQ.questionIndex
+    currentMainIndex = mainQuestions.findIndex(q => 
+      (q.questionIndex !== undefined ? q.questionIndex : interviewSession.value.questions.indexOf(q)) === parentIndex
+    )
+    if (currentMainIndex === -1) {
+      // 如果找不到，说明parentIndex本身就是主问题的序号（0, 1, 2...）
+      currentMainIndex = parentIndex < mainQuestions.length ? parentIndex : mainQuestions.length - 1
+    }
+  } else {
+    // 主问题，计算这是第几个主问题
+    currentMainIndex = mainQuestions.findIndex(q => 
+      (q.questionIndex !== undefined ? q.questionIndex : interviewSession.value.questions.indexOf(q)) === currentQ.questionIndex
+    )
+    if (currentMainIndex === -1) currentMainIndex = 0
+  }
+  
+  // 确保进度在0-100%之间
+  currentMainIndex = Math.max(0, Math.min(currentMainIndex, mainQuestionCount - 1))
+  
+  return ((currentMainIndex + 1) / mainQuestionCount) * 100
 })
 
 // room 阶段：分成 3 个相位
@@ -457,6 +568,10 @@ watch(openSettings, (v) => {
 // 提前交卷确认对话框
 const showCompleteConfirm = ref(false)
 const isSubmitting = ref(false)
+
+// 退出面试确认对话框
+const showExitConfirm = ref(false)
+const isExiting = ref(false)
 
 // 未完成面试相关
 const showUnfinishedDialog = ref(false)
@@ -531,55 +646,6 @@ async function getInterviewEvaluation() {
   }
 }
 
-// 降级到本地模拟评分
-function generateMockReport() {
-  // 评分是 Demo：固定基准分
-  const base = 70 + Math.round(Math.random() * 16)
-
-  const dims = [
-    { k: '沟通表达', v: clamp(base + rand(-6, 8)) },
-    { k: '技术深度', v: clamp(base + rand(-10, 10)) },
-    { k: '结构化思维', v: clamp(base + rand(-10, 8)) },
-    { k: '项目经验', v: clamp(base + rand(-8, 9)) },
-    { k: '加分项', v: clamp(base + rand(-9, 7)) },
-  ]
-  const overall = Math.round(dims.reduce((s,d)=>s+d.v,0)/dims.length)
-
-  // 每题评分（模拟）：并给一句建议
-  const qScores = interviewSession.value.questions.map(() => clamp(base + rand(-12, 10)))
-  const qAdvicePool = [
-    '先给结论，再用 1~2 个证据支撑，最后补充权衡。',
-    '补充量化指标：性能、成本、延迟、准确率或转化率。',
-    '用 STAR/PREP 结构：背景→任务→行动→结果→复盘。',
-    '明确边界条件：输入、约束、失败场景与降级策略。',
-    '强调 trade-off：为什么选 A 而不是 B，以及风险与验证。'
-  ]
-  const qDetails = interviewSession.value.questions.map((q, i) => ({
-    title: q.text,
-    score: qScores[i],
-    advice: qAdvicePool[i % qAdvicePool.length],
-  }))
-
-  return {
-    overall,
-    summary: overall >= 85
-      ? '整体表现很强：表达清晰、论点结构完整。建议继续补足更硬的指标与对比实验。'
-      : overall >= 75
-        ? '整体表现不错：建议回答更结构化（STAR/PREP），并在关键点补充量化结果。'
-        : '建议优先准备：项目复盘（讲清楚你做了什么）+ 基础知识（讲清楚为什么）。',
-    weakness: overall >= 85
-      ? ['技术细节可以再补充"权衡依据"', '表达可以再更简洁（先结论后细节）']
-      : overall >= 75
-        ? ['回答偶尔缺少量化指标', '部分问题没有先给结论']
-        : ['结构化不足，容易铺叙', '项目亮点与结果不够具体', '对 trade-off 的思考偏少'],
-    dimLabels: dims.map(d=>d.k),
-    dimData: dims.map(d=>d.v),
-    qLabels: qScores.map((_,i)=>`Q${i+1}`),
-    qScores,
-    questions: qDetails
-  }
-}
-
 // 后端检测 / 音频解锁
 async function checkServer(){
   try {
@@ -596,113 +662,121 @@ function unlock(){
   try { avatar.value?.unlockAudio?.() } catch {}
 }
 
-// 使用新的API模块创建面试会话
-async function createInterviewSession() {
-  try {
-    // 使用新的API模块 - 完全照抄 EchoMind-feature-
-    const data = await interviewApi.createSession({
-      resumeText: cfg.resumeText,
-      questionCount: cfg.questionCount,
-      resumeId: cfg.resumeId,
-      jobId: cfg.jobId,
-      knowledgeBaseIds: cfg.knowledgeBaseIds,
-      forceCreate: forceCreateNew.value
-    })
-    
-    // 保存会话信息
-    interviewSession.value = {
-      sessionId: data.sessionId,
-      jobId: data.jobId,
-      questions: data.questions.map(q => ({
-        text: q.question,
-        category: q.category,
-        type: q.type,
-        questionIndex: q.questionIndex,
-        followupQuestions: []
-      })),
-      currentQuestionIndex: data.currentQuestionIndex || 0,
-      currentFollowupIndex: 0
-    }
+// 使用新的API模块创建面试会话（带重试机制）
+async function createInterviewSession(maxRetries = 3) {
+  let lastError = null
 
-    return data
-  } catch (error) {
-    console.error('创建面试会话失败:', error)
-    // 降级到本地题库
-    return fallbackToLocalQuestions()
-  }
-}
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      subtitle.value = attempt === 1 ? '正在创建面试会话...' : `连接失败，正在重试 (${attempt}/${maxRetries})...`
 
-// 降级到本地题库
-function fallbackToLocalQuestions() {
-  const bank = QUESTION_BANK[cfg.type] || []
-  const shuffled = bank.slice().sort(() => Math.random() - 0.5)
-  const localQuestions = shuffled.slice(0, cfg.questionCount).map(text => ({
-    text,
-    followupQuestions: []
-  }))
+      // 使用新的API模块 - 完全照抄 EchoMind-feature-
+      const data = await interviewApi.createSession({
+        resumeText: cfg.resumeText,
+        questionCount: cfg.questionCount,
+        resumeId: cfg.resumeId,
+        jobId: cfg.jobId,
+        knowledgeBaseIds: cfg.knowledgeBaseIds,
+        forceCreate: forceCreateNew.value
+      })
 
-  interviewSession.value = {
-    sessionId: `local_${Date.now()}`,
-    jobId: cfg.jobId,
-    questions: localQuestions,
-    currentQuestionIndex: 0,
-    currentFollowupIndex: 0
-  }
-
-  return {
-    sessionId: interviewSession.value.sessionId,
-    jobId: cfg.jobId,
-    questions: localQuestions
-  }
-}
-
-// 使用新的API模块提交答案并获取下一题 - 完全照抄 EchoMind-feature-
-async function submitAnswerAndGetNext(answerText) {
-  try {
-    const session = interviewSession.value
-    const currentQ = currentQuestionObj.value
-    
-    // 使用新的API模块 - 完全照抄 EchoMind-feature-
-    const response = await interviewApi.submitAnswer({
-      sessionId: session.sessionId,
-      questionIndex: currentQ.questionIndex,
-      answer: answerText,
-      addQuestionIndex: currentQ.addQuestionIndex || 0
-    })
-    
-    // 完全照抄 EchoMind-feature- 的处理逻辑
-    if (response.hasNextQuestion && response.nextQuestion) {
-      // 后端返回了下一题（可能是追问或新的主问题）
-      // 为了让下一次提交能正确传递 addQuestionIndex，写回 currentQuestionObj
-      // 注意：后端追问次数字段在 response 上叫 addQuestionIndex
-      const normalizedNextQuestion = {
-        ...response.nextQuestion,
-        isFollowUp: response.addQuestionIndex === 0 ? false : true,
-        addQuestionIndex: response.addQuestionIndex ?? response.nextQuestion.addQuestionIndex ?? 0,
+      // 保存会话信息
+      interviewSession.value = {
+        sessionId: data.sessionId,
+        jobId: data.jobId,
+        questions: data.questions.map(q => ({
+          text: q.question,
+          category: q.category,
+          type: q.type,
+          questionIndex: q.questionIndex,
+          followupQuestions: []
+        })),
+        currentQuestionIndex: data.currentQuestionIndex || 0,
+        currentFollowupIndex: 0
       }
-      currentQuestionObj.value = normalizedNextQuestion
-      return response.nextQuestion.question
-    } else {
-      // 面试已完成
-      return null
+
+      return data
+    } catch (error) {
+      lastError = error
+      console.error(`创建面试会话失败 (尝试 ${attempt}/${maxRetries}):`, error)
+
+      if (attempt < maxRetries) {
+        // 延迟后重试
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+      }
     }
-  } catch (error) {
-    console.error('提交答案失败:', error)
-    // 降级到本地追问
-    return getDefaultFollowupQuestion()
   }
+
+  // 所有重试都失败了
+  subtitle.value = '连接服务器失败，请检查网络后刷新页面重试'
+  throw lastError
 }
 
-// 默认追问问题
-function getDefaultFollowupQuestion() {
-  const followups = [
-    '能详细展开说明一下吗？',
-    '你在这个项目中具体负责了哪些工作？',
-    '遇到了什么挑战，是如何解决的？',
-    '有什么可以改进的地方吗？',
-    '这个方案的优缺点是什么？'
-  ]
-  return followups[Math.floor(Math.random() * followups.length)]
+// 使用新的API模块提交答案并获取下一题（带重试机制）
+async function submitAnswerAndGetNext(answerText, maxRetries = 3) {
+  const session = interviewSession.value
+  const currentQ = currentQuestionObj.value
+  let lastError = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 1) {
+        subtitle.value = `提交失败，正在重试 (${attempt}/${maxRetries})...`
+        await new Promise(resolve => setTimeout(resolve, 1500 * attempt))
+      }
+
+      // 使用新的API模块 - 完全照抄 EchoMind-feature-
+      const response = await interviewApi.submitAnswer({
+        sessionId: session.sessionId,
+        questionIndex: currentQ.questionIndex,
+        answer: answerText,
+        addQuestionIndex: currentQ.addQuestionIndex || 0
+      })
+
+      // 完全照抄 EchoMind-feature- 的处理逻辑
+      if (response.hasNextQuestion && response.nextQuestion) {
+        // 后端返回了下一题（可能是追问或新的主问题）
+        // 为了让下一次提交能正确传递 addQuestionIndex，写回 currentQuestionObj
+        // 注意：后端追问次数字段在 response 上叫 addQuestionIndex
+        const isFollowUp = response.addQuestionIndex > 0
+        const normalizedNextQuestion = {
+          ...response.nextQuestion,
+          isFollowUp: isFollowUp,
+          mainQuestionIndex: isFollowUp ? response.nextQuestion.questionIndex : undefined,
+          addQuestionIndex: response.addQuestionIndex ?? response.nextQuestion.addQuestionIndex ?? 0,
+        }
+        currentQuestionObj.value = normalizedNextQuestion
+        return response.nextQuestion.question
+      } else {
+        // 面试已完成
+        return null
+      }
+    } catch (error) {
+      lastError = error
+      console.error(`提交答案失败 (尝试 ${attempt}/${maxRetries}):`, error)
+
+      // 检查是否是会话不存在错误，这种错误不需要重试
+      const errorMsg = error.response?.data?.message || error.message || ''
+      const isSessionNotFound = errorMsg.includes('会话不存在') ||
+                                 errorMsg.includes('SESSION_NOT_FOUND') ||
+                                 error.response?.status === 404
+
+      if (isSessionNotFound) {
+        // 会话已过期或被删除，提示用户
+        alert('面试会话已过期，请重新开始面试')
+        // 清除本地存储
+        localStorage.removeItem('interviewConfig')
+        // 返回null表示面试结束
+        return null
+      }
+
+      if (attempt === maxRetries) {
+        // 所有重试都失败了
+        subtitle.value = '提交答案失败，请检查网络后重试'
+        throw lastError
+      }
+    }
+  }
 }
 
 // 检查是否有未完成的面试 - 完全照抄 EchoMind-feature-
@@ -711,7 +785,9 @@ async function checkUnfinishedSession() {
   
   try {
     const foundSession = await interviewApi.findUnfinishedSession(cfg.resumeId)
-    if (foundSession && !forceCreateNew.value) {
+    // 前端过滤：只把 IN_PROGRESS 状态的会话当成未完成
+    // CREATED 状态是刚创建未开始答题，不算未完成
+    if (foundSession && !forceCreateNew.value && foundSession.status === 'IN_PROGRESS') {
       unfinishedSession.value = foundSession
       showUnfinishedDialog.value = true
     }
@@ -778,11 +854,19 @@ function restoreSession(sessionToRestore) {
     for (let i = 0; i <= sessionToRestore.currentQuestionIndex; i++) {
       const q = sessionToRestore.questions[i]
       if (q) {
+        const isFollowUp = q.isFollowUp || (q.addQuestionIndex > 0)
+        const mainIndex = q.questionIndex + 1
+        const followUpIndex = isFollowUp ? (q.addQuestionIndex || 1) : null
+        
         transcript.value.push({
           id: `${Date.now()}-${i}-q`,
           role: 'interviewer',
           text: q.question,
-          category: q.category
+          category: q.category,
+          questionType: true,
+          isFollowUp: isFollowUp,
+          mainIndex: mainIndex,
+          followUpIndex: followUpIndex
         })
         if (q.userAnswer) {
           transcript.value.push({
@@ -825,10 +909,12 @@ async function createNewSession() {
   if (data.questions && data.questions.length > 0) {
     const firstQuestion = data.questions[0]
     currentQuestionObj.value = {
-      questionIndex: firstQuestion.questionIndex || 0,
+      questionIndex: firstQuestion.questionIndex !== undefined ? firstQuestion.questionIndex : 0,
       question: firstQuestion.question || '',
       type: firstQuestion.type || '',
       category: firstQuestion.category || '',
+      isFollowUp: firstQuestion.isFollowUp || false,
+      mainQuestionIndex: firstQuestion.parentQuestionIndex !== undefined ? firstQuestion.parentQuestionIndex : firstQuestion.mainQuestionIndex,
       addQuestionIndex: 0
     }
   }
@@ -839,9 +925,24 @@ async function createNewSession() {
   await ask(currentQuestion.value)
 }
 
+// 验证会话是否有效
+async function validateSession(sessionId) {
+  try {
+    // 本地会话直接返回有效
+    if (sessionId.startsWith('local_')) {
+      return true
+    }
+    const session = await interviewApi.getSession(sessionId)
+    return session && (session.status === 'CREATED' || session.status === 'IN_PROGRESS')
+  } catch (error) {
+    console.error('验证会话失败:', error)
+    return false
+  }
+}
+
 // 初始化面试 - 完全照抄 EchoMind-feature-
 async function initInterview() {
-  // 首先检查是否有未完成的面试
+  // 首先检查是否有未完成的面试（无论是否有本地配置，都要检查后端）
   if (!forceCreateNew.value) {
     await checkUnfinishedSession()
     if (unfinishedSession.value) {
@@ -853,6 +954,15 @@ async function initInterview() {
   // 从localStorage读取sessionId和问题列表
   const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
   if (savedConfig.sessionId && savedConfig.questions && !forceCreateNew.value) {
+    // 验证会话是否仍然有效
+    const isValid = await validateSession(savedConfig.sessionId)
+    if (!isValid) {
+      console.warn('本地会话已过期，创建新会话')
+      localStorage.removeItem('interviewConfig')
+      await createNewSession()
+      return
+    }
+    
     interviewSession.value.sessionId = savedConfig.sessionId
     interviewSession.value.questions = savedConfig.questions
     interviewSession.value.currentQuestionIndex = savedConfig.currentQuestionIndex || 0
@@ -861,10 +971,12 @@ async function initInterview() {
     const currentQ = savedConfig.questions[savedConfig.currentQuestionIndex || 0]
     if (currentQ) {
       currentQuestionObj.value = {
-        questionIndex: currentQ.questionIndex || savedConfig.currentQuestionIndex || 0,
+        questionIndex: currentQ.questionIndex !== undefined ? currentQ.questionIndex : (savedConfig.currentQuestionIndex || 0),
         question: currentQ.question || currentQ.text || '',
         type: currentQ.type || '',
         category: currentQ.category || '',
+        isFollowUp: currentQ.isFollowUp || false,
+        mainQuestionIndex: currentQ.mainQuestionIndex,
         addQuestionIndex: 0
       }
     }
@@ -884,11 +996,39 @@ async function initInterview() {
 async function ask(text){
   phase.value = 'asking'
   const currentQ = currentQuestionObj.value
+  const isFollowUp = currentQ.isFollowUp || (currentQ.addQuestionIndex > 0)
+  
+  // 计算主问题序号（不包括追问）
+  let mainIndex
+  // 先获取所有主问题
+  const mainQuestions = interviewSession.value.questions.filter(q => !q.isFollowUp)
+  
+  if (isFollowUp) {
+    // 追问问题，找到对应的主问题在mainQuestions数组中的位置
+    const parentIndex = currentQ.mainQuestionIndex !== undefined ? currentQ.mainQuestionIndex : currentQ.questionIndex
+    const idx = mainQuestions.findIndex(q => 
+      (q.questionIndex !== undefined ? q.questionIndex : interviewSession.value.questions.indexOf(q)) === parentIndex
+    )
+    mainIndex = idx !== -1 ? idx + 1 : (parentIndex < mainQuestions.length ? parentIndex + 1 : mainQuestions.length)
+  } else {
+    // 主问题，计算这是第几个主问题
+    const idx = mainQuestions.findIndex(q => 
+      (q.questionIndex !== undefined ? q.questionIndex : interviewSession.value.questions.indexOf(q)) === currentQ.questionIndex
+    )
+    mainIndex = idx !== -1 ? idx + 1 : 1
+  }
+  
+  const followUpIndex = isFollowUp ? (currentQ.addQuestionIndex || 1) : null
+  
   transcript.value.push({ 
     id: `${Date.now()}-${Math.random()}`, 
     role: 'interviewer', 
     text, 
-    category: currentQ.isFollowUp ? `追问(${currentQ.addQuestionIndex || 0})` : currentQ.category 
+    category: isFollowUp ? `追问(${currentQ.addQuestionIndex || 0})` : currentQ.category,
+    questionType: true,
+    isFollowUp: isFollowUp,
+    mainIndex: mainIndex,
+    followUpIndex: followUpIndex
   })
   scrollToBottom()
 
@@ -972,6 +1112,9 @@ async function transcribeAudio(audioBlob) {
 
     const response = await fetch(`${API_BASE}/api/interview/sessions/asr`, {
       method: 'POST',
+      headers: {
+        'X-User-Id': '1'  // 添加用户认证头
+      },
       body: formData
     })
 
@@ -985,9 +1128,10 @@ async function transcribeAudio(audioBlob) {
     // 检查是否包含 transcription 字段（后端返回格式）
     if (result && result.transcription) {
       // 保存完整的语音分析结果供展示
+      // 注意：后端返回 clarityScore（清晰度），不是 tensionScore（紧张度）
       lastVoiceAnalysis.value = {
         confidenceScore: result.confidenceScore,
-        tensionScore: result.tensionScore,
+        clarityScore: result.clarityScore,  // 修复：使用后端实际返回的字段
         speechSpeed: result.speechSpeed,
         analysisReason: result.analysisReason
       }
@@ -1057,13 +1201,16 @@ async function stopRecording() {
       const recognizedText = await transcribeAudio(audioBlob)
       
       if (recognizedText) {
-        // 识别成功，使用识别文本
-        pushAnswerAndNext(recognizedText)
+        // 识别成功，使用识别文本，并传递ASR分析结果
+        pushAnswerAndNext(recognizedText, lastVoiceAnalysis.value)
       } else {
         // 识别失败，使用时长占位
         const dur = Math.max(1, Math.round((Date.now() - voiceStartedAt.value) / 1000))
-        pushAnswerAndNext(`已回答完毕，时长 ${dur}s`)
+        pushAnswerAndNext(`已回答完毕，时长 ${dur}s`, null)
       }
+      
+      // 清空本次的ASR分析结果
+      lastVoiceAnalysis.value = null
       
       resolve()
     }
@@ -1079,9 +1226,14 @@ function commitText(){
 }
 
 // 统一的答案提交处理 - 完全照抄 EchoMind-feature-
-async function handleSubmitAnswer(answerText) {
-  // 添加用户消息到聊天记录
-  transcript.value.push({ id: `${Date.now()}-${Math.random()}`, role: 'candidate', text: answerText })
+async function handleSubmitAnswer(answerText, voiceAnalysis = null) {
+  // 添加用户消息到聊天记录（如果是语音输入，附带ASR分析结果）
+  transcript.value.push({ 
+    id: `${Date.now()}-${Math.random()}`, 
+    role: 'candidate', 
+    text: answerText,
+    voiceAnalysis: voiceAnalysis
+  })
   scrollToBottom()
   
   // 停止计时器
@@ -1101,8 +1253,52 @@ async function handleSubmitAnswer(answerText) {
 }
 
 // 保留旧函数名以兼容现有代码，但实际调用新的处理逻辑
-async function pushAnswerAndNext(answerText) {
-  await handleSubmitAnswer(answerText)
+async function pushAnswerAndNext(answerText, voiceAnalysis = null) {
+  await handleSubmitAnswer(answerText, voiceAnalysis)
+}
+
+// 暂时退出面试 - 保存当前答案并退出
+async function handleTempExit() {
+  if (!interviewSession.value.sessionId) return
+  
+  isExiting.value = true
+  try {
+    // 1. 如果有未提交的答案，先暂存
+    const currentQ = currentQuestionObj.value
+    if (currentQ && currentQ.question) {
+      const currentAnswer = transcript.value
+        .filter(m => m.role === 'candidate')
+        .pop()?.text
+      
+      if (currentAnswer && currentAnswer.trim()) {
+        try {
+          await interviewApi.saveAnswer({
+            sessionId: interviewSession.value.sessionId,
+            questionIndex: currentQ.questionIndex,
+            answer: currentAnswer,
+            addQuestionIndex: currentQ.addQuestionIndex || 0
+          })
+          console.log('暂存答案成功')
+        } catch (err) {
+          console.error('暂存答案失败:', err)
+          // 继续退出流程，不阻塞用户
+        }
+      }
+    }
+    
+    // 2. 清除 localStorage 中的会话数据
+    localStorage.removeItem('interviewConfig')
+    
+    // 3. 关闭弹窗并返回首页
+    showExitConfirm.value = false
+    router.push('/app/home')
+    
+  } catch (err) {
+    console.error('暂时退出失败:', err)
+    subtitle.value = '退出失败，请重试'
+  } finally {
+    isExiting.value = false
+  }
 }
 
 // 提前交卷 - 完全照抄 EchoMind-feature- 前端实现
@@ -1112,15 +1308,11 @@ async function finishInterview() {
 
   isSubmitting.value = true
   try {
-    // 检查是否为本地会话
-    const isLocalSession = interviewSession.value.sessionId.startsWith('local_')
-    if (!isLocalSession) {
-      // 调用提前交卷接口
-      await interviewApi.completeInterview(interviewSession.value.sessionId)
-    }
     showCompleteConfirm.value = false
+    showExitConfirm.value = false
     
     // 面试已完成，评估将在后台进行，跳转到面试记录页
+    // 注意：onInterviewComplete 内部会调用 completeInterview，这里不需要重复调用
     await onInterviewComplete()
   } catch (err) {
     subtitle.value = '提前交卷失败，请重试'
@@ -1140,21 +1332,26 @@ function closeInterviewCompleteModal() {
   router.push('/')
 }
 
-// 面试完成回调 - 显示面试详情弹窗
+// 关闭面试评价成功提示弹窗 - 跳转到学习计划页面
+function closeEvaluationSuccessModal() {
+  showEvaluationSuccessModal.value = false
+  // 跳转到学习计划页面
+  router.push('/app/home/study-plan')
+}
+
+// 面试完成回调 - 跳转到报告加载页面
 async function onInterviewComplete() {
   // 清除当前面试会话数据
   localStorage.removeItem('interviewConfig')
-  
-  // 显示面试完成弹窗
-  showInterviewCompleteModal.value = true
-  interviewDetailLoading.value = true
-  interviewDetailError.value = null
-  
+
+  // 保存当前会话ID和聊天记录，供报告页面使用
+  localStorage.setItem('interviewTranscript', JSON.stringify(transcript.value))
+
   // 检查是否为本地会话
   const isLocalSession = interviewSession.value.sessionId.startsWith('local_')
   if (isLocalSession) {
-    // 本地会话使用模拟数据
-    interviewDetail.value = {
+    // 本地会话直接生成模拟数据并显示成功弹窗
+    const mockReport = {
       overallScore: 85,
       overallFeedback: '整体表现良好，技术基础扎实，沟通表达清晰。',
       strengths: [
@@ -1176,90 +1373,79 @@ async function onInterviewComplete() {
         }
       })
     }
-    interviewDetailLoading.value = false
+    localStorage.setItem('interviewReport', JSON.stringify(mockReport))
+    // 显示成功弹窗
+    showEvaluationSuccessModal.value = true
     return
   }
-  
-  // 真实会话：实现轮询机制等待评价生成
-  let pollingCount = 0
-  const maxPollingCount = 30 // 最多轮询30次（约15秒）
-  const pollingInterval = 500 // 每500毫秒轮询一次
-  
-  const pollReport = async () => {
-    try {
-      const report = await interviewApi.getReport(interviewSession.value.sessionId)
-      
-      // 检查报告是否完整
-      if (report && report.overallScore !== undefined && report.overallFeedback) {
-        interviewDetail.value = report
-        interviewDetailLoading.value = false
-        return true
-      } else {
-        // 报告不完整，继续轮询
-        pollingCount++
-        if (pollingCount < maxPollingCount) {
-          setTimeout(pollReport, pollingInterval)
-        } else {
-          // 轮询超时，显示备用数据
-          interviewDetailError.value = '评价生成需要时间，请稍后在面试记录中查看完整报告'
-          interviewDetail.value = {
-            overallScore: 0,
-            overallFeedback: '面试已完成，AI评价正在生成中，请稍后查看完整报告。',
-            strengths: ['表现积极', '态度认真'],
-            improvements: ['评价生成中...'],
-            answers: transcript.value.filter(msg => msg.role === 'interviewer').map((q, index) => {
-              const answer = transcript.value.find(a => a.role === 'candidate' && a.id > q.id)
-              return {
-                questionIndex: index,
-                question: q.text,
-                userAnswer: answer ? answer.text : '(未回答)',
-                feedback: '评价生成中...'
-              }
-            })
-          }
-          interviewDetailLoading.value = false
-        }
-      }
-    } catch (err) {
-      console.error('获取面试报告失败:', err)
-      pollingCount++
-      if (pollingCount < maxPollingCount) {
-        setTimeout(pollReport, pollingInterval)
-      } else {
-        // 轮询超时，显示备用数据
-        interviewDetailError.value = '获取面试评价失败，请稍后查看面试记录'
-        interviewDetail.value = {
-          overallScore: 0,
-          overallFeedback: '面试已完成，评价正在生成中，请稍后查看完整报告。',
-          strengths: ['表现积极', '态度认真'],
-          improvements: ['可以更详细地回答问题'],
-          answers: transcript.value.filter(msg => msg.role === 'interviewer').map((q, index) => {
-            const answer = transcript.value.find(a => a.role === 'candidate' && a.id > q.id)
-            return {
-              questionIndex: index,
-              question: q.text,
-              userAnswer: answer ? answer.text : '(未回答)',
-              feedback: '评价生成中...'
-            }
-          })
-        }
-        interviewDetailLoading.value = false
-      }
-    }
+
+  // 真实会话：先调用完成接口，然后跳转到报告加载页面
+  try {
+    await interviewApi.completeInterview(interviewSession.value.sessionId)
+  } catch (err) {
+    console.error('完成面试接口调用失败:', err)
   }
-  
-  // 开始轮询
-  await pollReport()
+
+  // 跳转到报告加载页面，等待评估完成
+  router.replace(`/app/home/interview/report-loading?sessionId=${interviewSession.value.sessionId}`)
 }
 
 // 初始化
 onMounted(async () => {
+  // 添加页面关闭确认和浏览器返回按钮监听
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  // 添加历史记录状态，用于拦截返回按钮
+  history.pushState(null, '', location.href)
+  window.addEventListener('popstate', handlePopState)
+  
   // 检测后端连接
   await checkServer()
-  
-  // 初始化面试
-  await initInterview()
-  
+
+  // 从localStorage读取已准备好的面试配置
+  const savedConfig = JSON.parse(localStorage.getItem('interviewConfig') || '{}')
+  if (savedConfig.sessionId && savedConfig.questions) {
+    // 先检查是否有未完成的面试（优先检查后端的未完成会话）
+    if (!forceCreateNew.value && cfg.resumeId) {
+      await checkUnfinishedSession()
+      if (unfinishedSession.value) {
+        // 有未完成面试，显示对话框让用户选择，不自动开始
+        return
+      }
+    }
+    
+    // 恢复会话状态
+    interviewSession.value.sessionId = savedConfig.sessionId
+    interviewSession.value.questions = savedConfig.questions
+    interviewSession.value.currentQuestionIndex = savedConfig.currentQuestionIndex || 0
+
+    // 初始化当前题目
+    const currentQ = savedConfig.questions[savedConfig.currentQuestionIndex || 0]
+    if (currentQ) {
+      currentQuestionObj.value = {
+        questionIndex: currentQ.questionIndex || savedConfig.currentQuestionIndex || 0,
+        question: currentQ.question || currentQ.text || '',
+        type: currentQ.type || '',
+        category: currentQ.category || '',
+        addQuestionIndex: 0
+      }
+    }
+
+    // 开始面试，显示第一个问题
+    paused.value = false
+    await ask(currentQuestion.value)
+  } else {
+    // 没有本地配置，检查是否有未完成的面试
+    if (!forceCreateNew.value && cfg.resumeId) {
+      await checkUnfinishedSession()
+      if (unfinishedSession.value) {
+        // 有未完成面试，显示对话框让用户选择
+        return
+      }
+    }
+    // 没有准备好的配置，返回设置页面
+    router.replace('/app/home/interview/settings')
+  }
+
   // 添加按钮鼠标跟随效果
   document.querySelectorAll('.btn-glow').forEach(btn => {
     btn.addEventListener('mousemove', (e) => {
@@ -1272,18 +1458,48 @@ onMounted(async () => {
   })
 })
 
+// 页面关闭/刷新前的确认提示
+const handleBeforeUnload = (e) => {
+  // 如果面试还在进行中，提示用户
+  if (interviewSession.value.sessionId && 
+      currentQuestionObj.value.question && 
+      !showEvaluationSuccessModal.value) {
+    e.preventDefault()
+    e.returnValue = '面试还在进行中，确定要离开吗？您可以选择暂时退出保存进度。'
+    return e.returnValue
+  }
+}
+
+// 处理浏览器返回按钮 - 显示退出确认弹窗
+const handlePopState = (e) => {
+  // 如果面试还在进行中，阻止返回并显示确认弹窗
+  if (interviewSession.value.sessionId && 
+      currentQuestionObj.value.question && 
+      !showEvaluationSuccessModal.value &&
+      !showExitConfirm.value &&
+      !showCompleteConfirm.value) {
+    // 阻止默认返回行为
+    history.pushState(null, '', location.href)
+    // 显示退出确认弹窗
+    showExitConfirm.value = true
+  }
+}
+
 // 清理
 onBeforeUnmount(() => {
   stopTimers()
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop()
   }
+  // 移除事件监听器
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('popstate', handlePopState)
 })
 </script>
 
 <style scoped>
 .interview-room {
-  min-height: 100vh;
+  min-height: 100%;
   background: var(--bg0);
   display: flex;
   flex-direction: column;
@@ -1516,6 +1732,54 @@ onBeforeUnmount(() => {
   line-height: 1.4;
 }
 
+/* 面试评价生成成功弹窗样式 */
+.evaluation-success-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 20px;
+}
+
+.success-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.success-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 12px 0;
+}
+
+.success-message {
+  font-size: 15px;
+  color: var(--text);
+  margin: 0 0 8px 0;
+  line-height: 1.5;
+}
+
+.success-hint {
+  font-size: 14px;
+  color: var(--brand);
+  margin: 0;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
 /* 背景光晕效果 */
 .interview-room::before {
   content: '';
@@ -1703,7 +1967,7 @@ onBeforeUnmount(() => {
   background: var(--bg1);
   border-radius: 16px 16px 0 0;
   margin: 0 20px;
-  min-height: 200px;
+  min-height: 120px;
 }
 
 .chat-messages {
@@ -1796,20 +2060,83 @@ onBeforeUnmount(() => {
   border-top-right-radius: 4px;
 }
 
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .message-sender {
   font-size: 12px;
   color: var(--muted);
-  margin-bottom: 4px;
   font-weight: 500;
 }
 
+.message-bubble.candidate .message-header {
+  justify-content: flex-end;
+}
+
 .message-bubble.candidate .message-sender {
-  text-align: right;
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* 问题类型标签 */
+.question-type-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.question-type-tag.main {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: white;
+}
+
+.question-type-tag.follow-up {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 15%, transparent);
+  color: var(--warning, #f59e0b);
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 30%, transparent);
 }
 
 .message-text {
   white-space: pre-wrap;
+}
+
+/* 语音ASR分数显示 */
+.voice-scores {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  flex-wrap: wrap;
+}
+
+.score-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.score-tag.confidence {
+  background: rgba(255, 193, 7, 0.3);
+}
+
+.score-tag.clarity {
+  background: rgba(33, 150, 243, 0.3);
+}
+
+.score-icon {
+  font-size: 12px;
 }
 
 /* 占位符样式 */
@@ -1846,16 +2173,14 @@ onBeforeUnmount(() => {
 /* 底部输入区域 */
 .input-section {
   padding: 12px 20px 24px;
-  position: relative;
   z-index: 1;
   margin-top: auto;
   min-height: 80px;
   width: 100%;
   box-sizing: border-box;
   background: var(--bg0);
-  position: sticky;
-  bottom: 0;
   border-top: 1px solid var(--stroke);
+  flex-shrink: 0;
 }
 
 .text-input-bar {

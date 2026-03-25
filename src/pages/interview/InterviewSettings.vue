@@ -11,19 +11,44 @@
       <p class="page-subtitle">配置您的 AI 模拟面试参数</p>
     </div>
 
-    <!-- 已选简历信息 -->
-    <div v-if="selectedResume" class="selected-resume">
-      <div class="section-title">已选简历</div>
-      <div class="resume-info-card">
-        <div class="resume-icon">📄</div>
-        <div class="resume-details">
-          <div class="resume-name">{{ selectedResume.filename }}</div>
-          <div class="resume-meta">
-            <span>{{ formatDate(selectedResume.uploadedAt) }}</span>
-            <span>{{ formatFileSize(selectedResume.fileSize) }}</span>
+    <!-- 已选简历和知识库信息 -->
+    <div class="selected-files-section">
+      <!-- 已选简历 -->
+      <div v-if="selectedResume" class="selected-resume">
+        <div class="section-title">已选简历</div>
+        <div class="resume-info-card">
+          <div class="resume-icon">📄</div>
+          <div class="resume-details">
+            <div class="resume-name">{{ selectedResume.filename }}</div>
+            <div class="resume-meta">
+              <span>{{ formatDate(selectedResume.uploadedAt) }}</span>
+              <span>{{ formatFileSize(selectedResume.fileSize) }}</span>
+            </div>
+          </div>
+          <button class="change-btn" @click="changeResume">更换</button>
+        </div>
+      </div>
+
+      <!-- 已选知识库 -->
+      <div v-if="selectedKnowledgeBases.length > 0" class="selected-knowledge">
+        <div class="section-title">
+          已选知识库
+          <span class="kb-count">{{ selectedKnowledgeBases.length }} 个</span>
+        </div>
+        <div class="knowledge-list">
+          <div 
+            v-for="kb in selectedKnowledgeBases" 
+            :key="kb.id" 
+            class="knowledge-item"
+            :class="{ active: currentKbId === kb.id }"
+            @click="currentKbId = kb.id"
+          >
+            <span class="kb-icon">📚</span>
+            <span class="kb-name">{{ kb.name || kb.filename || '未命名知识库' }}</span>
+            <span v-if="currentKbId === kb.id" class="kb-active">✓</span>
           </div>
         </div>
-        <button class="change-btn" @click="changeResume">更换</button>
+        <button class="change-btn kb-change" @click="changeKnowledgeBase">更换知识库</button>
       </div>
     </div>
 
@@ -42,8 +67,8 @@
             v-for="type in jobTypes"
             :key="type.value"
             class="job-type-btn"
-            :class="{ active: settings.jobType === type.value }"
-            @click="settings.jobType = type.value"
+            :class="{ active: settings.jobId === type.value }"
+            @click="settings.jobId = type.value"
           >
             <span class="job-icon">{{ type.icon }}</span>
             <span class="job-name">{{ type.label }}</span>
@@ -97,21 +122,21 @@ const router = useRouter()
 const selectedResume = ref(null)
 // 已选知识库
 const selectedKnowledgeBases = ref([])
+// 当前选中的知识库ID
+const currentKbId = ref(null)
 
 // 面试设置（仅保留后端支持的参数）
+// jobId: 0=前端, 1=后端, 2=测试
 const settings = ref({
-  jobType: 'frontend',
+  jobId: 0,
   questionCount: 5
 })
 
-// 岗位类型选项
+// 岗位类型选项（与后端 JobConstants 对应）
 const jobTypes = [
-  { value: 'frontend', label: '前端开发', icon: '💻' },
-  { value: 'backend', label: '后端开发', icon: '⚙️' },
-  { value: 'algorithm', label: '算法工程师', icon: '📊' },
-  { value: 'fullstack', label: '全栈开发', icon: '🚀' },
-  { value: 'mobile', label: '移动端开发', icon: '📱' },
-  { value: 'devops', label: '运维开发', icon: '🔧' }
+  { value: 0, label: '前端开发', icon: '💻' },
+  { value: 1, label: '后端开发', icon: '⚙️' },
+  { value: 2, label: '测试工程师', icon: '🧪' }
 ]
 
 // 加载已选简历和知识库
@@ -128,17 +153,29 @@ onMounted(() => {
   const savedKnowledgeBases = localStorage.getItem('selectedKnowledgeBases')
   if (savedKnowledgeBases) {
     try {
-      selectedKnowledgeBases.value = JSON.parse(savedKnowledgeBases)
+      const parsed = JSON.parse(savedKnowledgeBases)
+      // 兼容处理：可能是ID数组[1,2,3]或对象数组[{id:1},{id:2}]
+      if (parsed.length > 0 && typeof parsed[0] === 'number') {
+        // ID数组，需要转换为对象数组
+        selectedKnowledgeBases.value = parsed.map(id => ({ id }))
+      } else {
+        // 对象数组
+        selectedKnowledgeBases.value = parsed
+      }
+      // 默认选中第一个知识库
+      if (selectedKnowledgeBases.value.length > 0) {
+        currentKbId.value = selectedKnowledgeBases.value[0].id
+      }
     } catch (e) {
       console.error('解析已选知识库失败:', e)
     }
   }
-  
+
   // 如果没有选中的简历，返回选择页面
   if (!selectedResume.value) {
     router.replace('/app/home/interview/resume-select')
   }
-  
+
   // 如果没有选中的知识库，返回知识库选择页面
   if (selectedKnowledgeBases.value.length === 0) {
     router.replace('/app/home/interview/knowledgebase-select')
@@ -155,17 +192,23 @@ const changeResume = () => {
   router.push('/app/home/interview/select-resume')
 }
 
+// 更换知识库
+const changeKnowledgeBase = () => {
+  router.push('/app/home/interview/knowledgebase-select')
+}
+
 // 开始面试
 const startInterview = () => {
   // 保存面试设置
   localStorage.setItem('interviewSettings', JSON.stringify({
     ...settings.value,
     resumeId: selectedResume.value.id,
-    knowledgeBaseIds: selectedKnowledgeBases.value
+    knowledgeBaseIds: selectedKnowledgeBases.value.map(kb => kb.id),
+    currentKnowledgeBaseId: currentKbId.value
   }))
-  
-  // 跳转到面试房间
-  router.push('/app/home/interview/room')
+
+  // 先跳转到加载页面，等待面试准备完成
+  router.push('/app/home/interview/loading')
 }
 
 // 格式化日期
@@ -316,6 +359,85 @@ const formatFileSize = (bytes) => {
 .change-btn:hover {
   border-color: var(--brand);
   background: var(--panel2);
+}
+
+/* 已选知识库 */
+.selected-knowledge {
+  margin-bottom: 24px;
+}
+
+.selected-knowledge .section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kb-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.knowledge-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 2px solid var(--stroke);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.knowledge-item:hover {
+  border-color: var(--brand);
+  background: var(--panel-hover);
+}
+
+.knowledge-item.active {
+  border-color: var(--brand);
+  background: var(--panel-hover);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.kb-icon {
+  font-size: 24px;
+}
+
+.kb-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kb-active {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+.change-btn.kb-change {
+  width: 100%;
 }
 
 /* 设置表单 */

@@ -5,7 +5,7 @@
       <span class="progress-value">{{ score }}/{{ maxScore }}</span>
     </div>
     <div class="progress-track">
-      <div 
+      <div
         class="progress-fill"
         :class="color"
         :style="{ width: percentage + '%' }"

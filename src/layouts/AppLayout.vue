@@ -16,44 +16,11 @@
   </div>
 </template>
 
-<style>
-/* Global fix for layout to handle absolute positioning */
-.layout {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.main {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.page-container {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-  will-change: clip-path, transform, opacity;
-  overflow-y: auto; /* Enable scrolling for sub-pages */
-  background: var(--bg0); /* 使用主题背景色 */
-  transition: background-color 0.3s ease; /* 主题切换时平滑过渡 */
-}
-
-/* Ensure Windmill home doesn't scroll unnecessarily */
-.windmill-container {
-  overflow: hidden;
-}
-</style>
-
 <script setup>
-import { computed } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowLeft } from 'lucide-vue-next'
 import gsap from 'gsap'
+import { lsGet } from '../lib/storage'
 import '../components/layout_extras.css'
 
 const router = useRouter()
@@ -64,6 +31,20 @@ const isWindmill = computed(() => route.path === '/app/home')
 const goHome = () => {
   router.push('/app/home')
 }
+
+// 在应用启动时加载保存的主题
+onMounted(() => {
+  const prefs = lsGet('ai_prefs', { theme: 'default' })
+  const themeId = prefs.theme || 'default'
+  
+  // 移除所有主题类
+  document.body.classList.remove('theme-warm', 'theme-ocean', 'theme-dopamine', 'theme-cloud-white')
+  
+  // 添加保存的主题类
+  if (themeId !== 'default') {
+    document.body.classList.add(`theme-${themeId}`)
+  }
+})
 
 // 保存最后一次点击位置
 let lastClickPosition = { x: 90, y: 90 }
@@ -152,5 +133,37 @@ const leave = (el, done) => {
      }) 
   }
 }
-
 </script>
+
+<style>
+/* Global fix for layout to handle absolute positioning */
+.layout {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.main {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.page-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: clip-path, transform, opacity;
+  overflow-y: auto; /* Enable scrolling for sub-pages */
+  background: var(--bg0); /* 使用主题背景色 */
+  transition: background-color 0.3s ease; /* 主题切换时平滑过渡 */
+}
+
+/* Ensure Windmill home doesn't scroll unnecessarily */
+.windmill-container {
+  overflow: hidden;
+}
+</style>

@@ -8,12 +8,13 @@
       :animate="{ opacity: 1, y: 0 }"
       :transition="{ duration: 0.5 }"
     >
-      <!-- 左侧留白，用来平衡布局 -->
-      <div class="header-left-placeholder"></div>
-
+      <!-- 左侧：返回按钮（全屏模式显示） -->
       <div class="header-left">
+        <button v-if="isFullscreen" class="btn-icon back-btn" @click="goBack" title="返回">
+          <ArrowLeft width="20" height="20" />
+        </button>
         
-        <!-- 标题居中 -->
+        <!-- 标题 -->
         <div class="header-title">
           <h1 class="page-title">知识问答</h1>
           <p v-if="currentSession" class="session-subtitle">
@@ -672,6 +673,26 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.back-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: var(--panel-hover);
+  border-color: var(--brand);
+  transform: translateX(-2px);
 }
 
 .header-info {

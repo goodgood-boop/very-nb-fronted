@@ -21,9 +21,9 @@
     <div v-else-if="knowledgeBases.length === 0" class="empty-state">
       <div class="empty-icon">📚</div>
       <h3>暂无知识库</h3>
-      <p>请先创建知识库，再开始面试</p>
-      <button class="btn primary" @click="goToKnowledgeBase">
-        前往知识库
+      <p>请先上传知识库文档，再开始面试</p>
+      <button class="btn primary" @click="showUploadModal = true">
+        上传知识库
       </button>
     </div>
 
@@ -64,6 +64,70 @@
         下一步：面试设置
       </button>
     </div>
+
+    <!-- 上传知识库弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showUploadModal" class="modal-overlay" @click="showUploadModal = false">
+          <div class="modal-content" @click.stop>
+            <div class="modal-header">
+              <h3>上传知识库文档</h3>
+              <button class="modal-close" @click="showUploadModal = false">×</button>
+            </div>
+            <div class="modal-body">
+              <div class="upload-form">
+                <div class="form-item">
+                  <label>选择文件</label>
+                  <div class="file-input-wrapper">
+                    <input
+                      ref="fileInput"
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt,.md"
+                      @change="handleFileSelect"
+                      style="display: none"
+                    />
+                    <button class="btn secondary" @click="$refs.fileInput.click()">
+                      {{ uploadFile ? uploadFile.name : '选择文件' }}
+                    </button>
+                  </div>
+                  <p class="form-hint">支持 PDF、DOC、DOCX、TXT、MD 格式</p>
+                </div>
+
+                <div class="form-item">
+                  <label>文档名称</label>
+                  <input
+                    v-model="uploadName"
+                    type="text"
+                    placeholder="输入文档名称"
+                    class="text-input"
+                  />
+                </div>
+
+                <div class="form-item">
+                  <label>分类（可选）</label>
+                  <input
+                    v-model="uploadCategory"
+                    type="text"
+                    placeholder="输入分类，如：技术、产品等"
+                    class="text-input"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn secondary" @click="showUploadModal = false">取消</button>
+              <button
+                class="btn primary"
+                @click="uploadKnowledge"
+                :disabled="!uploadFile || uploading"
+              >
+                {{ uploading ? '上传中...' : '上传' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -78,6 +142,13 @@ const router = useRouter()
 const loading = ref(true)
 const knowledgeBases = ref([])
 const selectedKnowledgeBases = ref([])
+
+// 上传弹窗状态
+const showUploadModal = ref(false)
+const uploadFile = ref(null)
+const uploadName = ref('')
+const uploadCategory = ref('')
+const uploading = ref(false)
 
 // 加载知识库列表
 const loadKnowledgeBases = async () => {
@@ -113,9 +184,38 @@ const goBack = () => {
   router.push('/app/home/interview/resume-select')
 }
 
-// 前往知识库页面
-const goToKnowledgeBase = () => {
-  router.push('/app/home/knowledge')
+// 处理文件选择
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    uploadFile.value = file
+    uploadName.value = file.name.replace(/\.[^/.]+$/, '')
+  }
+}
+
+// 上传知识库
+const uploadKnowledge = async () => {
+  if (!uploadFile.value) return
+
+  uploading.value = true
+  try {
+    await knowledgeBaseApi.uploadKnowledgeBase(
+      uploadFile.value,
+      uploadName.value || uploadFile.value.name,
+      uploadCategory.value
+    )
+    showUploadModal.value = false
+    uploadFile.value = null
+    uploadName.value = ''
+    uploadCategory.value = ''
+    // 重新加载知识库列表
+    await loadKnowledgeBases()
+  } catch (err) {
+    console.error('上传知识库失败:', err)
+    alert('上传失败: ' + (err.message || '请稍后重试'))
+  } finally {
+    uploading.value = false
+  }
 }
 
 // 前往面试设置
@@ -466,5 +566,143 @@ onMounted(() => {
 
 .knowledgebase-list::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--panel);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  font-size: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: var(--bg1);
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--stroke);
+  background: var(--bg0);
+}
+
+/* 表单样式 */
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-item label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.file-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.text-input {
+  padding: 12px 16px;
+  background: var(--bg0);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--shadow-hover);
+}
+
+.text-input::placeholder {
+  color: var(--muted);
+}
+
+/* 动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
