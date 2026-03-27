@@ -195,31 +195,31 @@ function flash(okRef, errRef, ok, err){
   setTimeout(()=>{ okRef.value=''; errRef.value='' }, 2200)
 }
 
-function saveProfile(){
+async function saveProfile(){
   try{
-    updateProfile({ username: username.value })
+    await updateProfile({ username: username.value })
     flash(okMsg, errMsg, '已保存', '')
   }catch(e){
     flash(okMsg, errMsg, '', e?.message || '保存失败')
   }
 }
 
-function setGradientAvatar(){
+async function setGradientAvatar(){
   try{
-    updateProfile({ avatar: { kind:'gradient', seed: user.value?.email || 'user' } })
+    await updateProfile({ avatar: { kind:'gradient', seed: user.value?.email || 'user' } })
     flash(okMsg, errMsg, '已切换头像', '')
   }catch(e){
     flash(okMsg, errMsg, '', e?.message || '失败')
   }
 }
 
-function onPickFile(ev){
+async function onPickFile(ev){
   const f = ev.target.files?.[0]
   if (!f) return
   const reader = new FileReader()
-  reader.onload = () => {
+  reader.onload = async () => {
     try{
-      updateProfile({ avatar: { kind:'image', src: String(reader.result) } })
+      await updateProfile({ avatar: { kind:'image', src: String(reader.result) } })
       flash(okMsg, errMsg, '头像已更新', '')
     }catch(e){
       flash(okMsg, errMsg, '', e?.message || '失败')
@@ -228,9 +228,9 @@ function onPickFile(ev){
   reader.readAsDataURL(f)
 }
 
-function onChangePassword(){
+async function onChangePassword(){
   try{
-    changePassword({ oldPassword: oldPwd.value, newPassword: newPwd.value })
+    await changePassword({ oldPassword: oldPwd.value, newPassword: newPwd.value })
     oldPwd.value=''
     newPwd.value=''
     flash(okMsg2, errMsg2, '密码已修改', '')
@@ -244,9 +244,9 @@ function onLogout(){
   router.replace('/login')
 }
 
-function onDelete(){
+async function onDelete(){
   try{
-    deleteAccount({ password: delPwd.value })
+    await deleteAccount({ password: delPwd.value })
     router.replace('/register')
   }catch(e){
     flash(okMsg2, errMsg2, '', e?.message || '注销失败')

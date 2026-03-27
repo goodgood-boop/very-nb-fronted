@@ -1,22 +1,38 @@
 /**
  * 统一的 Axios 请求封装
  * 基于 EchoMind-feature- 的 request.ts 实现
+ * 已对接后端 2.0 JWT 认证
  */
 
 import axios from 'axios'
+import { getToken } from '../lib/auth.js'
 
 // 后端基础 URL
-const baseURL = import.meta.env.PROD ? '' : 'http://localhost:8080'
+const baseURL = import.meta.env.PROD ? '' : 'http://113.54.242.14:8080'
 
 // 创建 axios 实例
 const instance = axios.create({
   baseURL,
   timeout: 60000,
   headers: {
-    'Content-Type': 'application/json',
-    'X-User-Id': '1' // 默认用户ID
+    'Content-Type': 'application/json'
   }
 })
+
+/**
+ * 请求拦截器 - 自动添加 JWT Token
+ */
+instance.interceptors.request.use(
+  (config) => {
+    // 使用 auth.js 中的 getToken 获取 Token（正确处理 JSON 解析）
+    const token = getToken()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
 
 /**
  * 响应拦截器
@@ -27,7 +43,7 @@ const instance = axios.create({
 instance.interceptors.response.use(
   (response) => {
     const result = response.data
-    
+
     // 检查是否是 Result 格式
     if (result && typeof result === 'object' && 'code' in result) {
       if (result.code === 200) {
@@ -37,11 +53,22 @@ instance.interceptors.response.use(
       // 失败：直接抛出 message
       return Promise.reject(new Error(result.message || '请求失败'))
     }
-    
+
     // 非 Result 格式，直接返回
     return result
   },
   (error) => {
+    // 处理 401 未授权 - 清除登录状态并跳转到登录页
+    if (error.response?.status === 401) {
+      localStorage.removeItem('ai_token')
+      localStorage.removeItem('ai_user_info')
+      // 如果不是在登录页面，则跳转
+      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+        window.location.href = '/login'
+      }
+      return Promise.reject(new Error('登录已过期，请重新登录'))
+    }
+
     // 有响应的情况：后端返回了结果（即使是错误）
     if (error.response) {
       const { data } = error.response

@@ -11,7 +11,8 @@ import { request, getErrorMessage } from './request.js'
 export const resumeApi = {
   /**
    * 获取所有简历列表
-   * @returns {Promise<Array<{id: number, filename: string, fileSize: number, contentType: string, uploadedAt: string, accessCount: number, analyzeStatus: string}>>}
+   * 对应后端 ResumeListItemDTO: { id, filename, fileSize, uploadedAt, accessCount, latestScore, lastAnalyzedAt, interviewCount }
+   * @returns {Promise<Array<{id: number, filename: string, fileSize: number, uploadedAt: string, accessCount: number, latestScore: number, lastAnalyzedAt: string, interviewCount: number}>>}
    */
   async getResumes() {
     return request.get('/api/resumes')
@@ -30,8 +31,9 @@ export const resumeApi = {
 
   /**
    * 获取简历详情
+   * 对应后端 ResumeDetailDTO: { id, filename, fileSize, contentType, storageUrl, uploadedAt, accessCount, resumeText, analyzeStatus, analyzeError, analyses, interviews }
    * @param {number} resumeId - 简历ID
-   * @returns {Promise<ResumeDetail>}
+   * @returns {Promise<{id: number, filename: string, fileSize: number, contentType: string, storageUrl: string, uploadedAt: string, accessCount: number, resumeText: string, analyzeStatus: string, analyzeError: string, analyses: Array, interviews: Array}>}
    */
   async getResumeDetail(resumeId) {
     return request.get(`/api/resumes/${resumeId}/detail`)
@@ -48,31 +50,55 @@ export const resumeApi = {
 
   /**
    * 导出简历分析报告为 PDF
+   * GET /api/resumes/{id}/export
    * @param {number} resumeId - 简历ID
    * @returns {Promise<Blob>}
    */
   async exportAnalysisPdf(resumeId) {
-    const response = await fetch(
-      `${import.meta.env.PROD ? '' : 'http://localhost:8080'}/api/resumes/${resumeId}/export/analysis`,
-      {
-        headers: {
-          'X-User-Id': '1' // 默认用户ID
-        }
-      }
-    )
-    if (!response.ok) {
-      throw new Error(`导出失败: ${response.status}`)
-    }
-    return response.blob()
+    return request.get(`/api/resumes/${resumeId}/export`, {
+      responseType: 'blob'
+    })
   },
 
   /**
    * 获取简历统计信息
-   * GET /api/resumes/statistics
+   * 注意：后端 2.0 版本暂不提供此接口，返回模拟数据
    * @returns {Promise<{totalCount: number, totalInterviewCount: number, totalAccessCount: number}>}
    */
   async getStatistics() {
-    return request.get('/api/resumes/statistics')
+    // 后端 2.0 版本暂无此接口，返回基于现有数据的模拟统计
+    try {
+      const resumes = await this.getResumes()
+      const totalCount = resumes.length
+      let totalInterviewCount = 0
+      let totalAccessCount = 0
+
+      for (const resume of resumes) {
+        totalAccessCount += resume.accessCount || 0
+        // 获取简历详情来统计面试次数
+        try {
+          const detail = await this.getResumeDetail(resume.id)
+          if (detail.interviews) {
+            totalInterviewCount += detail.interviews.length
+          }
+        } catch {
+          // 忽略单个简历详情获取失败
+        }
+      }
+
+      return {
+        totalCount,
+        totalInterviewCount,
+        totalAccessCount
+      }
+    } catch {
+      // 如果获取失败，返回零值
+      return {
+        totalCount: 0,
+        totalInterviewCount: 0,
+        totalAccessCount: 0
+      }
+    }
   },
 
   /**

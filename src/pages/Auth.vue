@@ -1,5 +1,8 @@
 <template>
   <div class="auth-page page-with-bg">
+    <!-- 粒子网络背景 -->
+    <ParticleNetwork />
+    
     <div class="auth-card" :class="{ 'register-mode': isRegister }">
       <!-- 左侧 -->
       <div class="auth-left">
@@ -16,14 +19,24 @@
             <p class="subtitle">登录你的账户继续面试之旅</p>
           </div>
           
+          <!-- 错误提示 - 动态显示在表单顶部 -->
+          <transition name="error-slide">
+            <div v-if="loginError" class="error-message error-message-top">
+              <span class="error-icon">⚠️</span>
+              {{ loginError }}
+            </div>
+          </transition>
+          
           <div class="form-body">
             <div class="input-wrap">
-              <label>邮箱 / 用户名</label>
+              <label>邮箱</label>
               <input 
-                type="text" 
+                type="email" 
                 v-model.trim="loginForm.email" 
-                placeholder="请输入邮箱或用户名"
+                placeholder="请输入邮箱"
                 class="input"
+                :class="{ 'input-error': loginError }"
+                @input="clearLoginError"
               />
             </div>
             
@@ -34,6 +47,8 @@
                 v-model="loginForm.password" 
                 placeholder="请输入密码"
                 class="input"
+                :class="{ 'input-error': loginError }"
+                @input="clearLoginError"
               />
             </div>
             
@@ -46,8 +61,6 @@
             </div>
             
             <button class="btn-primary btn-glow" @click="onLogin">登 录</button>
-            
-            <div v-if="loginError" class="error-message">{{ loginError }}</div>
           </div>
         </div>
         
@@ -89,6 +102,14 @@
             <p class="subtitle">填写信息开始你的面试之旅</p>
           </div>
           
+          <!-- 错误提示 - 动态显示在表单顶部 -->
+          <transition name="error-slide">
+            <div v-if="registerError" class="error-message error-message-top">
+              <span class="error-icon">⚠️</span>
+              {{ registerError }}
+            </div>
+          </transition>
+          
           <div class="form-body">
             <div class="input-wrap">
               <label>用户名</label>
@@ -97,6 +118,8 @@
                 v-model.trim="registerForm.username" 
                 placeholder="请输入用户名"
                 class="input"
+                :class="{ 'input-error': registerError }"
+                @input="clearRegisterError"
               />
             </div>
             
@@ -107,6 +130,8 @@
                 v-model.trim="registerForm.email" 
                 placeholder="请输入邮箱"
                 class="input"
+                :class="{ 'input-error': registerError }"
+                @input="clearRegisterError"
               />
             </div>
             
@@ -117,6 +142,8 @@
                 v-model="registerForm.password" 
                 placeholder="请输入密码"
                 class="input"
+                :class="{ 'input-error': registerError }"
+                @input="clearRegisterError"
               />
             </div>
             
@@ -127,22 +154,38 @@
                 v-model="registerForm.confirmPassword" 
                 placeholder="请再次输入密码"
                 class="input"
+                :class="{ 'input-error': registerError }"
+                @input="clearRegisterError"
               />
             </div>
             
             <button class="btn-primary btn-glow" @click="onRegister">注 册</button>
-            
-            <div v-if="registerError" class="error-message">{{ registerError }}</div>
           </div>
         </div>
       </div>
     </div>
     
     <!-- 背景装饰 -->
+    <!-- 动态背景层 -->
     <div class="bg-decoration">
+      <!-- 基础渐变背景 -->
+      <div class="bg-gradient"></div>
+      <!-- 动态光晕 -->
       <div class="glow-1"></div>
       <div class="glow-2"></div>
       <div class="glow-3"></div>
+      <div class="glow-4"></div>
+      <!-- 粒子网格 -->
+      <div class="particle-grid"></div>
+      <!-- 浮动几何图形 -->
+      <div class="floating-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+      </div>
+      <!-- 扫描线效果 -->
+      <div class="scan-lines"></div>
     </div>
   </div>
 </template>
@@ -151,15 +194,28 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login, register } from '../lib/auth'
+import { lsGet } from '../lib/storage'
+import ParticleNetwork from '../components/ParticleNetwork.vue'
 
 const router = useRouter()
 const route = useRoute()
+
+// 主题恢复 - 与主页面保持一致
+const THEME_KEY = 'app_theme_id'
+
+const initTheme = () => {
+  const savedThemeId = lsGet(THEME_KEY, 1)
+  document.body.setAttribute('data-theme', savedThemeId.toString())
+}
 
 // 状态管理
 const isRegister = ref(false)
 
 // 根据路由自动切换模式
 onMounted(() => {
+  // 恢复用户选择的主题
+  initTheme()
+  
   isRegister.value = route.path === '/register'
   
   // 添加按钮鼠标跟随效果
@@ -189,6 +245,20 @@ const registerForm = ref({
 const loginError = ref('')
 const registerError = ref('')
 
+// 清除登录错误
+function clearLoginError() {
+  if (loginError.value) {
+    loginError.value = ''
+  }
+}
+
+// 清除注册错误
+function clearRegisterError() {
+  if (registerError.value) {
+    registerError.value = ''
+  }
+}
+
 // 切换登录/注册
 function toggleAuth() {
   isRegister.value = !isRegister.value
@@ -200,25 +270,28 @@ function toggleAuth() {
   }
 }
 
-// 登录处理
-function onLogin() {
+// 登录处理 - 异步调用后端接口
+async function onLogin() {
   try {
     loginError.value = ''
-    login({ email: loginForm.value.email, password: loginForm.value.password })
+    await login({
+      email: loginForm.value.email,
+      password: loginForm.value.password
+    })
     router.replace(route.query.next || '/app/home')
   } catch (e) {
     loginError.value = e?.message || '登录失败'
   }
 }
 
-// 注册处理
-function onRegister() {
+// 注册处理 - 异步调用后端接口
+async function onRegister() {
   try {
     registerError.value = ''
-    register({ 
-      email: registerForm.value.email || registerForm.value.username, 
-      username: registerForm.value.username, 
-      password: registerForm.value.password 
+    await register({
+      email: registerForm.value.email,
+      username: registerForm.value.username,
+      password: registerForm.value.password
     })
     router.replace('/app/home')
   } catch (e) {
@@ -238,53 +311,38 @@ function onRegister() {
   overflow: hidden;
 }
 
-/* 背景装饰 */
+/* 背景装饰 - 简化版，配合粒子网络 */
 .bg-decoration {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  overflow: hidden;
 }
 
+/* 基础渐变背景 - 使用全局主题变量 */
+.bg-gradient {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-gradient, linear-gradient(135deg, #0A0C14 0%, #1A1E2C 100%));
+}
+
+/* 柔和光晕 - 仅保留一层 */
 .glow-1 {
   position: absolute;
-  top: -10%;
-  left: -10%;
-  width: 50%;
-  height: 50%;
-  background: radial-gradient(ellipse at center, rgba(100, 108, 255, 0.15) 0%, transparent 70%);
-  animation: float 8s ease-in-out infinite;
+  top: -20%;
+  left: -20%;
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(ellipse at center, rgba(100, 108, 255, 0.08) 0%, transparent 70%);
+  animation: float 20s ease-in-out infinite;
+  filter: blur(60px);
 }
 
-.glow-2 {
-  position: absolute;
-  bottom: -10%;
-  right: -10%;
-  width: 40%;
-  height: 40%;
-  background: radial-gradient(ellipse at center, rgba(255, 90, 90, 0.1) 0%, transparent 70%);
-  animation: float 10s ease-in-out infinite reverse;
-}
-
-.glow-3 {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 60%;
-  height: 60%;
-  background: radial-gradient(ellipse at center, rgba(54, 211, 153, 0.08) 0%, transparent 60%);
-  animation: pulse 6s ease-in-out infinite;
-}
-
+/* 动画定义 */
 @keyframes float {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(20px, -20px); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.1); }
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(20px, -20px) rotate(1deg); }
 }
 
 /* 主卡片 */
@@ -512,6 +570,51 @@ function onRegister() {
   color: var(--bad);
   font-size: 13px;
   text-align: center;
+}
+
+/* 顶部错误提示 - 动态显示 */
+.error-message-top {
+  margin: 0 32px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 500;
+  animation: errorShake 0.5s ease;
+}
+
+.error-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* 错误提示动画 */
+.error-slide-enter-active,
+.error-slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.error-slide-enter-from,
+.error-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* 输入框错误状态 */
+.input-error {
+  border-color: var(--bad) !important;
+  background: rgba(255, 90, 90, 0.05) !important;
+}
+
+.input-error:focus {
+  box-shadow: 0 0 0 3px rgba(255, 90, 90, 0.2) !important;
+}
+
+/* 错误抖动动画 */
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
 }
 
 /* 切换动画 */

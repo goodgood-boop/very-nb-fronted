@@ -353,8 +353,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { resumeApi } from '../../api/resume.js'
-import RadarChart from '../RadarChartInline.vue'
-import ScoreProgressBar from '../ScoreProgressBarInline.vue'
+import RadarChart from '../RadarChart.vue'
+import ScoreProgressBar from '../ScoreProgressBar.vue'
 
 const props = defineProps({
   resumeId: {

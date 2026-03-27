@@ -147,7 +147,6 @@
               <div class="compact-weather">
                 <div class="weather-icon-large">{{ weatherIcon }}</div>
                 <div class="weather-info-compact">
-                  <div class="weather-temp-compact">{{ weatherTemp }}°</div>
                   <div class="weather-desc-compact">{{ weatherDesc }}</div>
                 </div>
               </div>
@@ -1070,7 +1069,7 @@ const onChangePassword = async () => {
   
   try {
     const { changePassword } = await import('../../lib/auth')
-    await changePassword(oldPwd.value, newPwd.value)
+    await changePassword({ oldPassword: oldPwd.value, newPassword: newPwd.value })
     okMsg.value = '密码已修改'
     oldPwd.value = ''
     newPwd.value = ''

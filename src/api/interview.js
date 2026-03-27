@@ -183,21 +183,22 @@ export const interviewApi = {
 
   /**
    * 获取每日一题
-   * GET /api/interview/sessions/getquestion/
+   * GET api/interview/sessions/getquestion/ (注意：后端路径没有开头的/)
    * @returns {Promise<TestQuestionEntity>}
    */
   async getDailyQuestion() {
-    return request.get('/api/interview/sessions/getquestion/')
+    return request.get('api/interview/sessions/getquestion/')
   },
 
   /**
    * 获取面试分数统计
-   * GET /api/interview/sessions/getscores/{resumeId}
+   * GET api/interview/sessions/getscores/{resumeId} (注意：后端路径没有开头的/)
+   * 注意：后端 ScoreQuestionEntity 中字段名为 "socre"（拼写错误），前端已做兼容处理
    * @param {number} resumeId
-   * @returns {Promise<Array<{overallScore: number, scoreQuestionEntity: Array<{category: string, socre: number}>}>>}
+   * @returns {Promise<Array<{overallScore: number, scoreQuestionEntity: Array<{category: string, score: number}>}>>}
    */
   async getInterviewScores(resumeId) {
-    return request.get(`/api/interview/sessions/getscores/${resumeId}`)
+    return request.get(`api/interview/sessions/getscores/${resumeId}`)
   }
 }
 

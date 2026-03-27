@@ -135,27 +135,19 @@
           >
             <template #default="{ item: msg, index }">
               <div
-                class="message"
-                :class="[msg.type, { streaming: msg.isStreaming }]"
+                class="message-row"
+                :class="msg.type"
                 v-motion
                 :initial="{ opacity: 0, y: 20 }"
                 :enter="{ opacity: 1, y: 0 }"
                 :delay="index * 50"
               >
-                <div class="message-avatar">
-                  <div class="avatar" :class="msg.type">
-                    <User v-if="msg.type === 'user'" width="18" height="18" />
-                    <Bot v-else width="18" height="18" />
+                <div class="message-bubble" :class="msg.type">
+                  <div class="message-header">
+                    <span class="message-sender">{{ msg.type === 'user' ? '我' : 'AI助手' }}</span>
                   </div>
-                </div>
-                <div class="message-content">
-                  <div class="message-bubble">
-                    <div
-                      class="message-text"
-                      v-html="formatMessage(msg.content)"
-                    ></div>
-                    <span v-if="msg.isStreaming" class="typing-cursor">|</span>
-                  </div>
+                  <div class="message-text" v-html="formatMessage(msg.content)"></div>
+                  <span v-if="msg.isStreaming" class="typing-cursor">|</span>
                   <div class="message-meta">
                     <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
                     <span v-if="msg.sources && msg.sources.length > 0" class="message-sources">
@@ -1094,73 +1086,83 @@ onMounted(() => {
   padding: 24px;
 }
 
-.message {
+/* 消息行 - 与面试对话一致 */
+.message-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  animation: messageSlideIn 0.3s ease-out;
 }
 
-.message.user {
-  flex-direction: row-reverse;
+.message-row.assistant {
+  justify-content: flex-start;
 }
 
-.message-avatar {
-  flex-shrink: 0;
+.message-row.user {
+  justify-content: flex-end;
 }
 
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.avatar.user {
-  background: var(--brand);
-  color: white;
-}
-
-.avatar.assistant {
-  background: var(--panel2);
-  color: var(--muted);
-}
-
-.message-content {
-  max-width: 70%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.message.user .message-content {
-  align-items: flex-end;
-}
-
+/* 消息气泡 - 与面试对话一致 */
 .message-bubble {
-  padding: 14px 18px;
-  border-radius: 16px;
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: 12px;
   font-size: 14px;
   line-height: 1.6;
+  word-wrap: break-word;
+  box-shadow: var(--shadow);
   position: relative;
 }
 
-.message.assistant .message-bubble {
+/* AI助手消息 - 白色气泡，左对齐 */
+.message-bubble.assistant {
   background: var(--panel);
-  border: 1px solid var(--stroke);
   color: var(--text);
+  border: 1px solid var(--stroke);
   border-top-left-radius: 4px;
 }
 
-.message.user .message-bubble {
-  background: var(--brand);
+/* 用户消息 - 绿色气泡，右对齐 */
+.message-bubble.user {
+  background: var(--ok);
   color: white;
+  border: none;
   border-top-right-radius: 4px;
 }
 
-.message.streaming .message-bubble {
+.message-bubble.streaming {
   background: var(--panel2);
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.message-sender {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.message-bubble.user .message-header {
+  justify-content: flex-end;
+}
+
+.message-bubble.user .message-sender {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .message-text {
@@ -1186,7 +1188,7 @@ onMounted(() => {
   color: var(--brand);
 }
 
-.message.user .message-text :deep(.inline-code) {
+.message-bubble.user .message-text :deep(.inline-code) {
   background: rgba(255, 255, 255, 0.2);
   color: white;
 }
@@ -1207,10 +1209,15 @@ onMounted(() => {
   gap: 12px;
   font-size: 12px;
   color: var(--muted2);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--stroke);
 }
 
-.message.user .message-meta {
+.message-bubble.user .message-meta {
   justify-content: flex-end;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .message-sources {
@@ -1218,6 +1225,10 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   color: var(--brand);
+}
+
+.message-bubble.user .message-sources {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* 输入区域 */

@@ -1,9 +1,10 @@
 /**
- * 知识库API - 基于 EchoMind-feature- 的接口封装
+ * 知识库API - 对接后端 EchoMind 2.0 接口
+ * 使用 request.js 统一处理 JWT 认证
  */
 
-// 后端已配置 CORS，直接使用完整 URL
-const API_BASE_URL = 'http://localhost:8080';
+import { request } from './request.js';
+import { getToken } from '../lib/auth.js';
 
 // 向量化状态
 export const VectorStatus = {
@@ -12,31 +13,6 @@ export const VectorStatus = {
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED'
 };
-
-/**
- * 统一处理响应
- */
-async function handleResponse(response) {
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || `HTTP ${response.status}`);
-  }
-  const result = await response.json();
-  if (result.code !== undefined && result.code !== 200) {
-    throw new Error(result.message || '请求失败');
-  }
-  return result.data !== undefined ? result.data : result;
-}
-
-/**
- * 获取错误信息
- */
-export function getErrorMessage(error) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return '未知错误';
-}
 
 /**
  * 知识库API
@@ -48,7 +24,7 @@ export const knowledgeBaseApi = {
    * @param {File} file
    * @param {string} name
    * @param {string} category
-   * @returns {Promise<UploadKnowledgeBaseResponse>}
+   * @returns {Promise<Object>} - { id, name, category, fileSize, vectorStatus }
    */
   async uploadKnowledgeBase(file, name, category) {
     const formData = new FormData();
@@ -59,15 +35,8 @@ export const knowledgeBaseApi = {
     if (category) {
       formData.append('category', category);
     }
-    
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/upload`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+
+    return request.upload('/api/knowledgebase/upload', formData);
   },
 
   /**
@@ -77,7 +46,14 @@ export const knowledgeBaseApi = {
    * @returns {Promise<Blob>}
    */
   async downloadKnowledgeBase(id) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}/download`);
+    const response = await fetch(
+      `${import.meta.env.PROD ? '' : 'http://113.54.242.14:8080'}/api/knowledgebase/${id}/download`,
+      {
+        headers: {
+          'Authorization': `Bearer ${getToken() || ''}`
+        }
+      }
+    );
     if (!response.ok) {
       throw new Error('下载失败');
     }
@@ -89,7 +65,7 @@ export const knowledgeBaseApi = {
    * GET /api/knowledgebase/list
    * @param {string} sortBy - 'time' | 'size' | 'access' | 'question'
    * @param {string} vectorStatus - 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
-   * @returns {Promise<KnowledgeBaseItem[]>}
+   * @returns {Promise<Array>} - KnowledgeBaseListItemDTO[]
    */
   async getAllKnowledgeBases(sortBy, vectorStatus) {
     const params = new URLSearchParams();
@@ -100,27 +76,17 @@ export const knowledgeBaseApi = {
       params.append('vectorStatus', vectorStatus);
     }
     const queryString = params.toString();
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/list${queryString ? `?${queryString}` : ''}`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get(`/api/knowledgebase/list${queryString ? `?${queryString}` : ''}`);
   },
 
   /**
    * 获取知识库详情
    * GET /api/knowledgebase/{id}
    * @param {number} id
-   * @returns {Promise<KnowledgeBaseItem>}
+   * @returns {Promise<Object>} - KnowledgeBaseListItemDTO
    */
   async getKnowledgeBase(id) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get(`/api/knowledgebase/${id}`);
   },
 
   /**
@@ -130,13 +96,7 @@ export const knowledgeBaseApi = {
    * @returns {Promise<void>}
    */
   async deleteKnowledgeBase(id) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.delete(`/api/knowledgebase/${id}`);
   },
 
   // ========== 分类管理 ==========
@@ -147,41 +107,26 @@ export const knowledgeBaseApi = {
    * @returns {Promise<string[]>}
    */
   async getAllCategories() {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/categories`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get('/api/knowledgebase/categories');
   },
 
   /**
    * 根据分类获取知识库
    * GET /api/knowledgebase/category/{category}
    * @param {string} category
-   * @returns {Promise<KnowledgeBaseItem[]>}
+   * @returns {Promise<Array>} - KnowledgeBaseListItemDTO[]
    */
   async getByCategory(category) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/category/${encodeURIComponent(category)}`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get(`/api/knowledgebase/category/${encodeURIComponent(category)}`);
   },
 
   /**
    * 获取未分类的知识库
    * GET /api/knowledgebase/uncategorized
-   * @returns {Promise<KnowledgeBaseItem[]>}
+   * @returns {Promise<Array>} - KnowledgeBaseListItemDTO[]
    */
   async getUncategorized() {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/uncategorized`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get('/api/knowledgebase/uncategorized');
   },
 
   /**
@@ -192,32 +137,38 @@ export const knowledgeBaseApi = {
    * @returns {Promise<void>}
    */
   async updateCategory(id, category) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}/category`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify({ category }),
-    });
-    return handleResponse(response);
+    return request.put(`/api/knowledgebase/${id}/category`, { category });
   },
 
   // ========== 搜索 ==========
 
   /**
    * 搜索知识库
-   * GET /api/knowledgebase/search
+   * GET /api/knowledgebase/search?keyword=xxx
    * @param {string} keyword
-   * @returns {Promise<KnowledgeBaseItem[]>}
+   * @returns {Promise<Array>} - KnowledgeBaseListItemDTO[]
    */
   async search(keyword) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/search?keyword=${encodeURIComponent(keyword)}`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
+    // 优先调用后端搜索接口
+    try {
+      if (keyword && keyword.trim() !== '') {
+        return await request.get(`/api/knowledgebase/search?keyword=${encodeURIComponent(keyword)}`);
       }
-    });
-    return handleResponse(response);
+      // 空关键字返回全部
+      return await this.getAllKnowledgeBases();
+    } catch (error) {
+      // 后端接口失败时，使用前端过滤作为 fallback
+      console.warn('后端搜索接口失败，使用前端过滤:', error.message);
+      const allItems = await this.getAllKnowledgeBases();
+      if (!keyword || keyword.trim() === '') {
+        return allItems;
+      }
+      const lowerKeyword = keyword.toLowerCase();
+      return allItems.filter(item =>
+        (item.name && item.name.toLowerCase().includes(lowerKeyword)) ||
+        (item.category && item.category.toLowerCase().includes(lowerKeyword))
+      );
+    }
   },
 
   // ========== 统计 ==========
@@ -225,15 +176,41 @@ export const knowledgeBaseApi = {
   /**
    * 获取知识库统计信息
    * GET /api/knowledgebase/stats
-   * @returns {Promise<KnowledgeBaseStats>}
+   * @returns {Promise<Object>} - KnowledgeBaseStatsDTO
    */
   async getStatistics() {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/stats`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
+    // 优先调用后端统计接口
+    try {
+      const stats = await request.get('/api/knowledgebase/stats');
+      return {
+        totalCount: stats.totalCount || 0,
+        totalQuestionCount: stats.totalQuestionCount || 0,
+        totalAccessCount: stats.totalAccessCount || 0,
+        completedCount: stats.completedCount || 0,
+        processingCount: stats.processingCount || 0
+      };
+    } catch (error) {
+      // 后端接口失败时，使用前端计算作为 fallback
+      console.warn('后端统计接口失败，使用前端计算:', error.message);
+      try {
+        const allItems = await this.getAllKnowledgeBases();
+        return {
+          totalCount: allItems.length,
+          totalQuestionCount: allItems.reduce((sum, item) => sum + (item.questionCount || 0), 0),
+          totalAccessCount: allItems.reduce((sum, item) => sum + (item.accessCount || 0), 0),
+          completedCount: allItems.filter(item => item.vectorStatus === 'COMPLETED').length,
+          processingCount: allItems.filter(item => item.vectorStatus === 'PROCESSING' || item.vectorStatus === 'PENDING').length
+        };
+      } catch {
+        return {
+          totalCount: 0,
+          totalQuestionCount: 0,
+          totalAccessCount: 0,
+          completedCount: 0,
+          processingCount: 0
+        };
       }
-    });
-    return handleResponse(response);
+    }
   },
 
   // ========== 向量化管理 ==========
@@ -245,37 +222,25 @@ export const knowledgeBaseApi = {
    * @returns {Promise<void>}
    */
   async revectorize(id) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/${id}/revectorize`, {
-      method: 'POST',
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.post(`/api/knowledgebase/${id}/revectorize`);
   },
 
+  // ========== 问答查询 ==========
+
   /**
-   * 基于知识库回答问题
+   * 基于知识库回答问题（非流式）
    * POST /api/knowledgebase/query
-   * @param {QueryRequest} req
-   * @returns {Promise<QueryResponse>}
+   * @param {Object} req - { knowledgeBaseIds: number[], question: string }
+   * @returns {Promise<Object>} - { answer, sources }
    */
   async queryKnowledgeBase(req) {
-    const response = await fetch(`${API_BASE_URL}/api/knowledgebase/query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify(req),
-    });
-    return handleResponse(response);
+    return request.post('/api/knowledgebase/query', req);
   },
 
   /**
    * 基于知识库回答问题（流式SSE）
    * POST /api/knowledgebase/query/stream
-   * @param {QueryRequest} req
+   * @param {Object} req - { knowledgeBaseIds: number[], question: string }
    * @param {Function} onMessage - 收到消息回调
    * @param {Function} onComplete - 完成回调
    * @param {Function} onError - 错误回调
@@ -283,14 +248,17 @@ export const knowledgeBaseApi = {
    */
   async queryKnowledgeBaseStream(req, onMessage, onComplete, onError) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/knowledgebase/query/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify(req),
-    });
+      const baseURL = import.meta.env.PROD ? '' : 'http://113.54.242.14:8080';
+      const token = getToken() || '';
+
+      const response = await fetch(`${baseURL}/api/knowledgebase/query/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(req)
+      });
 
       if (!response.ok) {
         let errorMessage = `请求失败 (${response.status})`;
@@ -339,7 +307,7 @@ export const knowledgeBaseApi = {
         if (done) {
           if (buffer) {
             const content = extractEventContent(buffer);
-            if (content) {
+            if (content !== null) {
               onMessage(content);
             }
           }
@@ -349,10 +317,10 @@ export const knowledgeBaseApi = {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // SSE 事件以 \n\n 分隔
+        // SSE 事件以 \n\n 分隔，但也需要处理单行的情况
         let newlineIndex = buffer.indexOf('\n\n');
         if (newlineIndex === -1) {
-          // 处理单行 data: 格式
+          // 如果没有找到 \n\n，尝试处理单行 data: 格式
           const singleLineIndex = buffer.indexOf('\n');
           if (singleLineIndex !== -1 && buffer.substring(0, singleLineIndex).startsWith('data:')) {
             const line = buffer.substring(0, singleLineIndex);
@@ -365,12 +333,13 @@ export const knowledgeBaseApi = {
           continue;
         }
 
+        // 处理完整的事件块
         while (newlineIndex !== -1) {
-          const event = buffer.substring(0, newlineIndex);
+          const eventBlock = buffer.substring(0, newlineIndex);
           buffer = buffer.substring(newlineIndex + 2);
 
-          const content = extractEventContent(event);
-          if (content) {
+          const content = extractEventContent(eventBlock);
+          if (content !== null) {
             onMessage(content);
           }
 
@@ -378,9 +347,9 @@ export const knowledgeBaseApi = {
         }
       }
     } catch (error) {
-      onError(error instanceof Error ? error : new Error(String(error)));
+      onError(error);
     }
-  },
+  }
 };
 
 export default knowledgeBaseApi;

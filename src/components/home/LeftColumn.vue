@@ -3047,6 +3047,25 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+/* 下拉选项样式 - 适配全局主题 */
+.select-input option {
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.select-input option:hover,
+.select-input option:focus {
+  background: var(--panel2);
+}
+
+/* 下拉菜单整体样式（部分浏览器支持） */
+.select-input optgroup {
+  background: var(--panel);
+  color: var(--text);
+}
+
 .select-arrow {
   position: absolute;
   right: 12px;

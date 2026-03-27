@@ -6,7 +6,8 @@
       <div class="avatar-header">
         <div class="button-group">
           <button class="icon-btn" @click="unlock" title="解锁音频">🔊</button>
-          <FullscreenButton 
+          <button class="icon-btn" @click="testMouth" title="测试嘴型">👄</button>
+          <FullscreenButton
             v-model="isFullscreen"
             @toggle="onFullscreenToggle"
           />
@@ -382,10 +383,11 @@ import Live2DAvatar from '../components/Live2DAvatar.vue'
 import FullscreenButton from '../components/home/FullscreenButton.vue'  // 添加这行
 import { addRecord, labelType } from '../lib/records'
 import { interviewApi } from '../api/interview.js'
+import { getToken } from '../lib/auth.js'
 
 // EchoMind-37a 后端地址
 // 后端已配置 CORS，直接使用完整 URL
-const API_BASE = 'http://localhost:8080'
+const API_BASE = 'http://113.54.242.14:8080'
 
 const router = useRouter()
 const route = useRoute()
@@ -672,18 +674,28 @@ async function getInterviewEvaluation() {
 
 // 后端检测 / 音频解锁
 async function checkServer(){
-  try {
-    const r = await fetch(`${API_BASE}/api/resumes/health`, { cache: 'no-store' })
-    serverOk.value = r.ok
-  } catch {
-    serverOk.value = false
-  }
+  // 暂时注释掉 health 检查，直接认为后端可用
+  serverOk.value = true
+  // try {
+  //   const r = await fetch(`${API_BASE}/api/resumes/health`, { cache: 'no-store' })
+  //   serverOk.value = r.ok
+  // } catch {
+  //   serverOk.value = false
+  // }
 }
 
 function unlock(){
   // Live2DAvatar 里会创建 AudioContext，浏览器需要用户手势才能播放。
   // 所以我们提供一个"解锁音频"按钮。
   try { avatar.value?.unlockAudio?.() } catch {}
+}
+
+function testMouth(){
+  // 测试嘴型功能 - 强制开嘴 2 秒
+  console.log('[InterviewRoom] 测试嘴型...')
+  try { avatar.value?.debugMouth?.() } catch (e) {
+    console.error('[InterviewRoom] 测试嘴型失败:', e)
+  }
 }
 
 // 使用新的API模块创建面试会话（带重试机制）
@@ -1079,7 +1091,11 @@ async function ask(text){
   // 如果后端连通（serverOk），并且 Live2DAvatar 提供 speak()，才尝试播报。
   // 这样在"UI-only"情况下不会报错。
   if (serverOk.value && avatar.value?.speak) {
-    try { await avatar.value.speak(text, cfg.voice, cfg.rate) } catch {}
+    try {
+      await avatar.value.speak(text, cfg.voice, cfg.rate)
+    } catch (e) {
+      console.error('[TTS] 播报失败:', e)
+    }
   }
 
   // 进入思考阶段
@@ -1143,7 +1159,13 @@ async function testSpeak(){
   // 设置页里"试播一句"：用于验证 Live2D + TTS 链路是否工作。
   const text = '你好，我是今天的面试官。我们开始吧。'
   if (serverOk.value && avatar.value?.speak) {
-    try { await avatar.value.speak(text, cfg.voice, cfg.rate) } catch {}
+    try {
+      await avatar.value.speak(text, cfg.voice, cfg.rate)
+    } catch (e) {
+      console.error('[TTS] 试播失败:', e)
+    }
+  } else {
+    console.warn('[TTS] 无法试播: serverOk=', serverOk.value, ', avatar.speak=', !!avatar.value?.speak)
   }
 }
 
@@ -1157,7 +1179,7 @@ async function transcribeAudio(audioBlob) {
     const response = await fetch(`${API_BASE}/api/interview/sessions/asr`, {
       method: 'POST',
       headers: {
-        'X-User-Id': '1'  // 添加用户认证头
+        'Authorization': `Bearer ${getToken() || ''}`  // 使用 JWT Token
       },
       body: formData
     })

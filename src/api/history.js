@@ -1,4 +1,20 @@
-const API_BASE = 'http://localhost:8080'
+import { getToken } from '../lib/auth.js'
+
+const API_BASE = 'http://113.54.242.14:8080'
+
+/**
+ * 获取请求头（包含 JWT Token）
+ */
+function getHeaders() {
+  const headers = {
+    'Content-Type': 'application/json'
+  }
+  const token = getToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
+}
 
 /**
  * 处理响应 - 与 EchoMind-feature- 保持一致
@@ -33,7 +49,9 @@ async function handleResponse(response) {
  * GET /api/resumes
  */
 async function getResumes() {
-  const response = await fetch(`${API_BASE}/api/resumes`)
+  const response = await fetch(`${API_BASE}/api/resumes`, {
+    headers: getHeaders()
+  })
   return handleResponse(response)
 }
 
@@ -42,7 +60,9 @@ async function getResumes() {
  * GET /api/resumes/{id}/detail
  */
 async function getResumeDetail(id) {
-  const response = await fetch(`${API_BASE}/api/resumes/${id}/detail`)
+  const response = await fetch(`${API_BASE}/api/resumes/${id}/detail`, {
+    headers: getHeaders()
+  })
   return handleResponse(response)
 }
 
@@ -51,7 +71,9 @@ async function getResumeDetail(id) {
  * GET /api/interview/sessions/{sessionId}/details
  */
 async function getInterviewDetail(sessionId) {
-  const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}/details`)
+  const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}/details`, {
+    headers: getHeaders()
+  })
   return handleResponse(response)
 }
 
@@ -60,7 +82,9 @@ async function getInterviewDetail(sessionId) {
  * GET /api/resumes/{resumeId}/export
  */
 async function exportAnalysisPdf(resumeId) {
-  const response = await fetch(`${API_BASE}/api/resumes/${resumeId}/export`)
+  const response = await fetch(`${API_BASE}/api/resumes/${resumeId}/export`, {
+    headers: getHeaders()
+  })
   if (!response.ok) {
     throw new Error('导出失败')
   }
@@ -72,7 +96,9 @@ async function exportAnalysisPdf(resumeId) {
  * GET /api/interview/sessions/{sessionId}/export
  */
 async function exportInterviewPdf(sessionId) {
-  const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}/export`)
+  const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}/export`, {
+    headers: getHeaders()
+  })
   if (!response.ok) {
     throw new Error('导出失败')
   }
@@ -85,7 +111,8 @@ async function exportInterviewPdf(sessionId) {
  */
 async function deleteResume(id) {
   const response = await fetch(`${API_BASE}/api/resumes/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   })
   if (!response.ok) {
     throw new Error('删除失败')
@@ -98,7 +125,8 @@ async function deleteResume(id) {
  */
 async function deleteInterview(sessionId) {
   const response = await fetch(`${API_BASE}/api/interview/sessions/${sessionId}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getHeaders()
   })
   if (!response.ok) {
     throw new Error('删除失败')
@@ -107,11 +135,42 @@ async function deleteInterview(sessionId) {
 
 /**
  * 获取简历统计信息
- * GET /api/resumes/statistics
+ * 注意：后端 2.0 版本暂不提供此接口，返回模拟数据
  */
 async function getStatistics() {
-  const response = await fetch(`${API_BASE}/api/resumes/statistics`)
-  return handleResponse(response)
+  // 后端 2.0 版本暂无此接口，返回基于现有数据的模拟统计
+  try {
+    const resumes = await getResumes()
+    const totalCount = resumes.length
+    let totalInterviewCount = 0
+    let totalAccessCount = 0
+
+    for (const resume of resumes) {
+      totalAccessCount += resume.accessCount || 0
+      // 获取简历详情来统计面试次数
+      try {
+        const detail = await getResumeDetail(resume.id)
+        if (detail.interviews) {
+          totalInterviewCount += detail.interviews.length
+        }
+      } catch {
+        // 忽略单个简历详情获取失败
+      }
+    }
+
+    return {
+      totalCount,
+      totalInterviewCount,
+      totalAccessCount
+    }
+  } catch {
+    // 如果获取失败，返回零值
+    return {
+      totalCount: 0,
+      totalInterviewCount: 0,
+      totalAccessCount: 0
+    }
+  }
 }
 
 /**
@@ -120,7 +179,8 @@ async function getStatistics() {
  */
 async function reanalyze(id) {
   const response = await fetch(`${API_BASE}/api/resumes/${id}/reanalyze`, {
-    method: 'POST'
+    method: 'POST',
+    headers: getHeaders()
   })
   if (!response.ok) {
     throw new Error('重新分析失败')

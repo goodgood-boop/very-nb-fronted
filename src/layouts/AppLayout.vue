@@ -1,18 +1,17 @@
 <template>
   <div class="layout">
     <main class="main">
-      
-
       <router-view v-slot="{ Component, route }">
-        <transition 
-          :css="false" 
-          @enter="enter" 
+        <transition
+          :css="false"
+          @enter="enter"
           @leave="leave"
         >
           <component :is="Component" :key="route.path" class="page-container" />
         </transition>
       </router-view>
     </main>
+    <MobileNav />
   </div>
 </template>
 
@@ -21,6 +20,7 @@ import { onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import gsap from 'gsap'
 import { lsGet } from '../lib/storage'
+import MobileNav from '../components/ui/MobileNav.vue'
 import '../components/layout_extras.css'
 
 const router = useRouter()

@@ -1,6 +1,6 @@
 <template>
-  <div class="radar-chart" :style="{ height: height + 'px' }">
-    <svg :viewBox="`0 0 ${size} ${size}`" class="radar-svg">
+  <div class="radar-chart" :style="{ height: config.height + 'px' }">
+    <svg :viewBox="`0 0 ${config.size} ${config.size}`" class="radar-svg" :class="{ 'inline': size === 'inline' }">
       <!-- 背景网格 -->
       <g class="grid">
         <!-- 同心多边形 -->
@@ -16,8 +16,8 @@
           :key="'axis-' + i"
           :x1="center"
           :y1="center"
-          :x2="getPoint(item.angle, maxRadius).x"
-          :y2="getPoint(item.angle, maxRadius).y"
+          :x2="getPoint(item.angle, config.maxRadius).x"
+          :y2="getPoint(item.angle, config.maxRadius).y"
           class="axis-line"
         />
       </g>
@@ -40,7 +40,7 @@
         :key="'point-' + i"
         :cx="getPoint(item.angle, item.radius).x"
         :cy="getPoint(item.angle, item.radius).y"
-        r="5"
+        :r="config.pointRadius"
         class="data-point"
       />
 
@@ -62,11 +62,11 @@
         v-for="(item, i) in normalizedData"
         :key="'value-' + i"
         :x="getPoint(item.angle, item.radius).x"
-        :y="getPoint(item.angle, item.radius).y - 12"
+        :y="getPoint(item.angle, item.radius).y - config.valueOffset"
         class="value-label"
         text-anchor="middle"
       >
-        {{ item.originalScore }}/{{ item.originalFullMark }}
+        {{ size === 'inline' ? item.originalScore : item.originalScore + '/' + item.originalFullMark }}
       </text>
     </svg>
   </div>
@@ -81,15 +81,35 @@ const props = defineProps({
     required: true,
     default: () => []
   },
-  height: {
-    type: Number,
-    default: 280
+  size: {
+    type: String,
+    default: 'default' // 'default' | 'inline'
   }
 })
 
-const size = 280
-const center = size / 2
-const maxRadius = 90
+// 根据 size 返回配置
+const config = computed(() => {
+  if (props.size === 'inline') {
+    return {
+      size: 200,
+      maxRadius: 70,
+      pointRadius: 4,
+      valueOffset: 10,
+      height: 200,
+      labelOffset: 20
+    }
+  }
+  return {
+    size: 280,
+    maxRadius: 90,
+    pointRadius: 5,
+    valueOffset: 12,
+    height: 280,
+    labelOffset: 25
+  }
+})
+
+const center = computed(() => config.value.size / 2)
 const levels = 5
 
 // 归一化数据
@@ -101,7 +121,7 @@ const normalizedData = computed(() => {
 
   return props.data.map((item, index) => {
     const normalizedScore = (item.score / item.fullMark) * maxFullMark
-    const radius = (normalizedScore / maxFullMark) * maxRadius
+    const radius = (normalizedScore / maxFullMark) * config.value.maxRadius
     const angle = index * angleStep - Math.PI / 2
 
     return {
@@ -126,7 +146,7 @@ const dataPoints = computed(() => {
 
 // 获取网格点
 const getGridPoints = (level) => {
-  const radius = (level / levels) * maxRadius
+  const radius = (level / levels) * config.value.maxRadius
   const angleStep = (Math.PI * 2) / (props.data.length || 5)
   const points = []
 
@@ -142,14 +162,14 @@ const getGridPoints = (level) => {
 // 根据角度和半径计算坐标
 const getPoint = (angle, radius) => {
   return {
-    x: center + radius * Math.cos(angle),
-    y: center + radius * Math.sin(angle)
+    x: center.value + radius * Math.cos(angle),
+    y: center.value + radius * Math.sin(angle)
   }
 }
 
 // 获取标签位置
 const getLabelPosition = (item) => {
-  const labelRadius = maxRadius + 25
+  const labelRadius = config.value.maxRadius + config.value.labelOffset
   const point = getPoint(item.angle, labelRadius)
   
   // 调整标签位置避免重叠
@@ -177,6 +197,11 @@ const getLabelPosition = (item) => {
   height: 100%;
   max-width: 280px;
   max-height: 280px;
+}
+
+.radar-svg.inline {
+  max-width: 200px;
+  max-height: 200px;
 }
 
 .grid-line {

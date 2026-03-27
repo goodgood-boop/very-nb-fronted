@@ -1,34 +1,10 @@
 /**
- * RAG聊天API - 基于 EchoMind-feature- 的接口封装
+ * RAG聊天API - 对接后端 EchoMind 2.0 接口
+ * 使用 request.js 统一处理 JWT 认证
  */
 
-// 后端已配置 CORS，直接使用完整 URL
-const API_BASE_URL = 'http://localhost:8080';
-
-/**
- * 统一处理响应
- */
-async function handleResponse(response) {
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || `HTTP ${response.status}`);
-  }
-  const result = await response.json();
-  if (result.code !== undefined && result.code !== 200) {
-    throw new Error(result.message || '请求失败');
-  }
-  return result.data !== undefined ? result.data : result;
-}
-
-/**
- * 获取错误信息
- */
-export function getErrorMessage(error) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return '未知错误';
-}
+import { request, getErrorMessage } from './request.js';
+import { getToken } from '../lib/auth.js';
 
 /**
  * RAG聊天API
@@ -39,47 +15,29 @@ export const ragChatApi = {
    * POST /api/rag-chat/sessions
    * @param {number[]} knowledgeBaseIds
    * @param {string} title
-   * @returns {Promise<RagChatSession>}
+   * @returns {Promise<Object>} - SessionDTO { id, title, knowledgeBaseIds, createdAt }
    */
   async createSession(knowledgeBaseIds, title) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify({ knowledgeBaseIds, title }),
-    });
-    return handleResponse(response);
+    return request.post('/api/rag-chat/sessions', { knowledgeBaseIds, title });
   },
 
   /**
    * 获取会话列表
    * GET /api/rag-chat/sessions
-   * @returns {Promise<RagChatSessionListItem[]>}
+   * @returns {Promise<Array>} - SessionListItemDTO[]
    */
   async listSessions() {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get('/api/rag-chat/sessions');
   },
 
   /**
    * 获取会话详情
    * GET /api/rag-chat/sessions/{sessionId}
    * @param {number} sessionId
-   * @returns {Promise<RagChatSessionDetail>}
+   * @returns {Promise<Object>} - SessionDetailDTO
    */
   async getSessionDetail(sessionId) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}`, {
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.get(`/api/rag-chat/sessions/${sessionId}`);
   },
 
   /**
@@ -90,15 +48,7 @@ export const ragChatApi = {
    * @returns {Promise<void>}
    */
   async updateSessionTitle(sessionId, title) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/title`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify({ title }),
-    });
-    return handleResponse(response);
+    return request.put(`/api/rag-chat/sessions/${sessionId}/title`, { title });
   },
 
   /**
@@ -109,15 +59,7 @@ export const ragChatApi = {
    * @returns {Promise<void>}
    */
   async updateKnowledgeBases(sessionId, knowledgeBaseIds) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/knowledge-bases`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify({ knowledgeBaseIds }),
-    });
-    return handleResponse(response);
+    return request.put(`/api/rag-chat/sessions/${sessionId}/knowledge-bases`, { knowledgeBaseIds });
   },
 
   /**
@@ -127,13 +69,7 @@ export const ragChatApi = {
    * @returns {Promise<void>}
    */
   async togglePin(sessionId) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/pin`, {
-      method: 'PUT',
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
+    return request.put(`/api/rag-chat/sessions/${sessionId}/pin`);
   },
 
   /**
@@ -143,32 +79,7 @@ export const ragChatApi = {
    * @returns {Promise<void>}
    */
   async deleteSession(sessionId) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}`, {
-      method: 'DELETE',
-      headers: {
-        'X-User-Id': '1' // 默认用户ID
-      }
-    });
-    return handleResponse(response);
-  },
-
-  /**
-   * 发送消息（非流式）
-   * POST /api/rag-chat/sessions/{sessionId}/messages
-   * @param {number} sessionId
-   * @param {string} question
-   * @returns {Promise<RagChatMessage>}
-   */
-  async sendMessage(sessionId, question) {
-    const response = await fetch(`${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': '1' // 默认用户ID
-      },
-      body: JSON.stringify({ question }),
-    });
-    return handleResponse(response);
+    return request.delete(`/api/rag-chat/sessions/${sessionId}`);
   },
 
   /**
@@ -183,15 +94,18 @@ export const ragChatApi = {
    */
   async sendMessageStream(sessionId, question, onMessage, onComplete, onError) {
     try {
+      const baseURL = import.meta.env.PROD ? '' : 'http://113.54.242.14:8080';
+      const token = getToken() || '';
+
       const response = await fetch(
-        `${API_BASE_URL}/api/rag-chat/sessions/${sessionId}/messages/stream`,
+        `${baseURL}/api/rag-chat/sessions/${sessionId}/messages/stream`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Id': '1' // 默认用户ID
+            'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ question })
         }
       );
 
@@ -217,6 +131,7 @@ export const ragChatApi = {
       let buffer = '';
 
       // 从 SSE 事件中提取内容
+      // 后端返回格式: ServerSentEvent<String>，data 字段包含转义的换行符
       const extractEventContent = (event) => {
         if (!event.trim()) return null;
 
@@ -231,6 +146,7 @@ export const ragChatApi = {
 
         if (contentParts.length === 0) return null;
 
+        // 后端转义了换行符，需要反转义
         return contentParts.join('')
           .replace(/\\n/g, '\n')
           .replace(/\\r/g, '\r');
@@ -252,7 +168,7 @@ export const ragChatApi = {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // SSE 事件以 \n\n 分隔，但也需要处理单行的情况
+        // SSE 事件以 \n\n 分隔
         let newlineIndex = buffer.indexOf('\n\n');
         if (newlineIndex === -1) {
           // 如果没有找到 \n\n，尝试处理单行 data: 格式
@@ -284,7 +200,7 @@ export const ragChatApi = {
     } catch (error) {
       onError(new Error(getErrorMessage(error)));
     }
-  },
+  }
 };
 
 export default ragChatApi;

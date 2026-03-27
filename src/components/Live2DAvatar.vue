@@ -6,6 +6,7 @@
 import { ref, onMounted, onBeforeUnmount, defineExpose } from 'vue'
 import { Application } from 'pixi.js'
 import { pinyin } from 'pinyin-pro'
+import { getToken } from '../lib/auth.js'
 
 /**
  * ✅ 目标（稳定版）：
@@ -16,7 +17,7 @@ import { pinyin } from 'pinyin-pro'
 
 const MODEL_JSON_PATH = '/models/kei/kei_vowels_pro/runtime/kei_vowels_pro.model3.json'
 // 后端已配置 CORS，直接使用完整 URL
-const API_BASE = 'http://localhost:8080'
+const API_BASE = 'http://113.54.242.14:8080'
 
 const emit = defineEmits(['subtitle', 'speaking'])
 const wrap = ref(null)
@@ -66,6 +67,14 @@ async function ensureCubismCore() {
 // ---------------- 参数读写（稳健版）----------------
 const _paramIndexCache = new Map()
 const _idHandleCache = new Map()
+
+// 可能的嘴型参数名（不同模型可能使用不同名称）
+const MOUTH_PARAM_NAMES = [
+  'ParamMouthOpenY',
+  'PARAM_MOUTH_OPEN_Y',
+  'MouthOpenY',
+  'parammouthopeny'
+]
 
 function getCoreModel() {
   return (
@@ -126,20 +135,26 @@ function getParamIndex(idStr) {
 function safeSetParam(idStr, v) {
   const core = getCoreModel()
   if (!core) return
-  const handle = getIdHandle(idStr)
 
-  // 优先 byId
-  if (typeof core.setParameterValueById === 'function') {
-    if (handle) {
-      try { core.setParameterValueById(handle, v); return } catch {}
+  // 如果是嘴型参数，尝试所有可能的参数名
+  const paramNames = (idStr === 'ParamMouthOpenY') ? MOUTH_PARAM_NAMES : [idStr]
+
+  for (const name of paramNames) {
+    const handle = getIdHandle(name)
+
+    // 优先 byId
+    if (typeof core.setParameterValueById === 'function') {
+      if (handle) {
+        try { core.setParameterValueById(handle, v); return } catch {}
+      }
+      try { core.setParameterValueById(name, v); return } catch {}
     }
-    try { core.setParameterValueById(idStr, v); return } catch {}
-  }
 
-  // 兜底 byIndex
-  const idx = getParamIndex(idStr)
-  if (idx >= 0 && typeof core.setParameterValueByIndex === 'function') {
-    try { core.setParameterValueByIndex(idx, v); return } catch {}
+    // 兜底 byIndex
+    const idx = getParamIndex(name)
+    if (idx >= 0 && typeof core.setParameterValueByIndex === 'function') {
+      try { core.setParameterValueByIndex(idx, v); return } catch {}
+    }
   }
 }
 
@@ -347,7 +362,7 @@ async function speak(text, voice = 'zh-CN-XiaoxiaoNeural', rate = '+0%') {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-User-Id': '1'  // 添加用户认证头
+      'Authorization': `Bearer ${getToken() || ''}`  // 使用 JWT Token
     },
     body: JSON.stringify({ text: t, voice, rate }),
   })
@@ -470,38 +485,60 @@ onMounted(async () => {
   app.stage.addChild(model)
 
   // ✅ 关闭引擎自带 lipSync（避免它将来介入）
-try { model.internalModel.lipSync = false } catch {}
+  try {
+    model.internalModel.lipSync = false
+    console.log('[Live2D] lipSync 已关闭')
+  } catch (e) {
+    console.log('[Live2D] lipSync 关闭失败:', e)
+  }
 
-// ✅ 用 beforeModelUpdate 确保“最后覆盖”在 coreModel.update() 之前生效
-lipsyncHook = () => {
-  const now = performance.now()
+  // ✅ 用 beforeModelUpdate 确保"最后覆盖"在 coreModel.update() 之前生效
+  let hookCallCount = 0
+  lipsyncHook = () => {
+    hookCallCount++
+    const now = performance.now()
 
-  // 1) 自检：强制开嘴 2 秒（肉眼必定能看到）
-  if (now < forceTestUntil) {
-    safeSetParam('ParamMouthOpenY', 1)
+    // 每 60 帧打印一次调试信息（约 1 秒）
+    const shouldLog = hookCallCount % 60 === 0
+
+    // 1) 自检：强制开嘴 2 秒（肉眼必定能看到）
+    if (now < forceTestUntil) {
+      if (shouldLog) console.log('[Live2D] 强制测试嘴型:', now, forceTestUntil)
+      safeSetParam('ParamMouthOpenY', 1)
+      clearVowels()
+      safeSetParam('ParamA', 1)
+      return
+    }
+
+    // 2) 说话状态：开合 + AIUEO
+    if (currentAudio && !currentAudio.paused && !currentAudio.ended) {
+      const t = currentAudio.currentTime || 0
+      const open = envelope ? envAt(t) : analyserRms()
+      if (shouldLog) console.log('[Live2D] 说话中，嘴型开合度:', open.toFixed(3))
+      safeSetParam('ParamMouthOpenY', open)
+
+      const v = vowelAt(t)
+      if (v) {
+        if (shouldLog) console.log('[Live2D] 元音:', v)
+        setVowel(v)
+      } else {
+        clearVowels()
+      }
+      return
+    }
+
+    // 3) 非说话：闭嘴
+    safeSetParam('ParamMouthOpenY', 0)
     clearVowels()
-    safeSetParam('ParamA', 1)
-    return
   }
 
-  // 2) 说话状态：开合 + AIUEO
-  if (currentAudio && !currentAudio.paused && !currentAudio.ended) {
-    const t = currentAudio.currentTime || 0
-    const open = envelope ? envAt(t) : analyserRms()
-    safeSetParam('ParamMouthOpenY', open)
-
-    const v = vowelAt(t)
-    if (v) setVowel(v)
-    else clearVowels()
-    return
+  // 检查事件系统
+  if (model.internalModel.on) {
+    model.internalModel.on('beforeModelUpdate', lipsyncHook)
+    console.log('[Live2D] beforeModelUpdate 钩子已注册')
+  } else {
+    console.warn('[Live2D] beforeModelUpdate 事件不可用')
   }
-
-  // 3) 非说话：闭嘴
-  safeSetParam('ParamMouthOpenY', 0)
-  clearVowels()
-}
-
-model.internalModel.on('beforeModelUpdate', lipsyncHook)
 
   const fit = () => {
     if (!model || !wrap.value) return
@@ -534,6 +571,39 @@ model.internalModel.on('beforeModelUpdate', lipsyncHook)
               'UIdx=', getParamIndex('ParamU'),
               'EIdx=', getParamIndex('ParamE'),
               'OIdx=', getParamIndex('ParamO'))
+
+  // 打印所有可用参数（帮助调试）
+  try {
+    const core = getCoreModel()
+    if (core && typeof core.getParameterCount === 'function') {
+      const count = core.getParameterCount()
+      const params = []
+      for (let i = 0; i < Math.min(count, 50); i++) {
+        const pid = core.getParameterId(i)
+        // 处理不同类型的返回值
+        let s = ''
+        if (typeof pid === 'string') {
+          s = pid
+        } else if (pid && typeof pid === 'object') {
+          // 可能是 CubismId 对象
+          s = pid.getString?.() || pid.toString?.() || String(pid)
+        } else {
+          s = String(pid)
+        }
+        // 安全地检查是否包含 mouth 或 lip
+        try {
+          if (s && s.toLowerCase && (s.toLowerCase().includes('mouth') || s.toLowerCase().includes('lip'))) {
+            params.push(s)
+          }
+        } catch (err) {
+          // 忽略无法处理的参数名
+        }
+      }
+      console.log('[Live2D] 嘴型相关参数:', params)
+    }
+  } catch (e) {
+    console.log('[Live2D] 无法获取参数列表:', e)
+  }
 })
 
 onBeforeUnmount(() => {
